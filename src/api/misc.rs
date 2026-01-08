@@ -19,7 +19,7 @@ use super::error::ApiError;
 use crate::{
     VERSION_INFO,
     claude_code_state::ClaudeCodeState,
-    config::{CLEWDR_CONFIG, CookieStatus},
+    config::{CLEWDR_CONFIG, CookieStatus, LOG_DIR},
     services::cookie_actor::CookieActorHandle,
 };
 
@@ -388,4 +388,97 @@ async fn fetch_usage_percent(
         seven_sonnet,
         sonnet_reset,
     ))
+}
+
+/// Query parameters for logs endpoint
+#[derive(Deserialize)]
+pub struct LogsQuery {
+    /// Maximum number of lines to return (default 1000)
+    #[serde(default = "default_log_lines")]
+    lines: usize,
+}
+
+const fn default_log_lines() -> usize {
+    1000
+}
+
+/// API endpoint to retrieve application logs
+/// Reads log files from the log directory and returns the most recent entries
+///
+/// # Arguments
+/// * `t` - Auth bearer token for admin authentication
+/// * `query` - Query parameters including optional lines limit
+///
+/// # Returns
+/// * `Result<Json<Value>, ApiError>` - Log entries as JSON
+pub async fn api_get_logs(
+    AuthBearer(t): AuthBearer,
+    Query(query): Query<LogsQuery>,
+) -> Result<Json<Value>, ApiError> {
+    if !CLEWDR_CONFIG.load().admin_auth(&t) {
+        return Err(ApiError::unauthorized());
+    }
+
+    let log_dir = LOG_DIR.as_path();
+    if !log_dir.exists() {
+        return Ok(Json(json!({
+            "logs": [],
+            "message": "Log directory does not exist. Enable log_to_file in config."
+        })));
+    }
+
+    // Collect all log files and sort by modification time (newest first)
+    let mut log_files: Vec<_> = match std::fs::read_dir(log_dir) {
+        Ok(entries) => entries
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                e.path()
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|n| n.starts_with("clewdr.log"))
+            })
+            .collect(),
+        Err(e) => {
+            error!("Failed to read log directory: {}", e);
+            return Err(ApiError::internal(format!(
+                "Failed to read log directory: {}",
+                e
+            )));
+        }
+    };
+
+    // Sort by filename (which includes date) in descending order
+    log_files.sort_by(|a, b| b.path().cmp(&a.path()));
+
+    let mut all_lines: Vec<String> = Vec::new();
+    let max_lines = query.lines;
+
+    // Read log files until we have enough lines
+    for entry in log_files {
+        if all_lines.len() >= max_lines {
+            break;
+        }
+
+        let path = entry.path();
+        match std::fs::read_to_string(&path) {
+            Ok(content) => {
+                let file_lines: Vec<String> = content.lines().map(|s| s.to_string()).collect();
+                // Prepend lines from older files
+                all_lines.splice(0..0, file_lines);
+            }
+            Err(e) => {
+                warn!("Failed to read log file {:?}: {}", path, e);
+                continue;
+            }
+        }
+    }
+
+    // Take only the last N lines
+    let start = all_lines.len().saturating_sub(max_lines);
+    let logs: Vec<String> = all_lines[start..].to_vec();
+
+    Ok(Json(json!({
+        "logs": logs,
+        "total": logs.len(),
+    })))
 }

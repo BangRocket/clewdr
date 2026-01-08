@@ -25,7 +25,16 @@
   "tabs": {
     "claude": "Claude",
     "config": "Config",
+    "logs": "Logs",
     "auth": "Auth"
+  },
+  "logs": {
+    "title": "Console Logs",
+    "totalLines": "{{count}} lines",
+    "noLogs": "No logs available. Enable log_to_file in config to capture logs.",
+    "scrollToTop": "Top",
+    "scrollToBottom": "Bottom",
+    "autoScroll": "Auto-scroll to latest"
   },
   "claudeTab": {
     "submit": "Submit Cookie",
@@ -49,6 +58,13 @@
       "format": "Invalid cookie format",
       "auth": "Authentication failed. Please set a valid auth token.",
       "server": "Server error."
+    },
+    "browserImport": {
+      "button": "Import from Browser",
+      "importing": "Searching...",
+      "success": "Found cookie from {{browser}} ({{profile}})",
+      "notFound": "No Claude session cookie found. Make sure you're logged into Claude.ai in your browser.",
+      "error": "Failed to import: {{message}}"
     }
   },
   "cookieStatus": {

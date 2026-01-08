@@ -174,7 +174,48 @@ export async function saveConfig(configData: ConfigData) {
   return response;
 }
 
-// Add this new function to frontend/src/api/index.ts
+/**
+ * Fetches browser cookie for Claude from the server
+ * @returns The browser cookie data
+ */
+export async function getBrowserCookie() {
+  const token = localStorage.getItem("authToken") || "";
+  const response = await fetch("/api/browser-cookie", {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Error ${response.status}: ${response.statusText}`);
+  }
+
+  return await response.json();
+}
+
+/**
+ * Fetches application logs from the server
+ * @param lines Maximum number of log lines to fetch (default 1000)
+ * @returns The logs data
+ */
+export async function getLogs(lines = 1000) {
+  const token = localStorage.getItem("authToken") || "";
+  const response = await fetch(`/api/logs?lines=${lines}`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Error ${response.status}: ${response.statusText}`);
+  }
+
+  return await response.json();
+}
 
 /**
  * Sends multiple cookies to the server as a batch.
