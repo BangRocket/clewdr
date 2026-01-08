@@ -25,7 +25,16 @@
   "tabs": {
     "claude": "Claude",
     "config": "配置",
+    "logs": "日志",
     "auth": "认证"
+  },
+  "logs": {
+    "title": "控制台日志",
+    "totalLines": "{{count}} 行",
+    "noLogs": "暂无日志。请在配置中启用 log_to_file 来记录日志。",
+    "scrollToTop": "顶部",
+    "scrollToBottom": "底部",
+    "autoScroll": "自动滚动到最新"
   },
   "claudeTab": {
     "submit": "提交Cookie",
@@ -49,6 +58,13 @@
       "format": "无效的cookie格式",
       "auth": "认证失败。请设置有效的认证令牌。",
       "server": "服务器错误。"
+    },
+    "browserImport": {
+      "button": "从浏览器导入",
+      "importing": "搜索中...",
+      "success": "从 {{browser}} ({{profile}}) 找到cookie",
+      "notFound": "未找到Claude会话cookie。请确保您已在浏览器中登录Claude.ai。",
+      "error": "导入失败：{{message}}"
     }
   },
   "cookieStatus": {

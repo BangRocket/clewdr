@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { postCookie } from "../../api";
+import { postCookie, getBrowserCookie } from "../../api";
 import Button from "../common/Button";
 import FormInput from "../common/FormInput";
 import StatusMessage from "../common/StatusMessage";
+import LoadingSpinner from "../common/LoadingSpinner";
 
 interface CookieResult {
   cookie: string;
@@ -15,11 +16,48 @@ const CookieSubmitForm: React.FC = () => {
   const { t } = useTranslation();
   const [cookies, setCookies] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
   const [results, setResults] = useState<CookieResult[]>([]);
   const [overallStatus, setOverallStatus] = useState({
     type: "info" as "info" | "success" | "error" | "warning",
     message: "",
   });
+
+  const handleImportFromBrowser = async () => {
+    setIsImporting(true);
+    setOverallStatus({ type: "info", message: "" });
+
+    try {
+      const response = await getBrowserCookie();
+
+      if (response.found && response.cookie) {
+        setCookies(response.cookie);
+        setOverallStatus({
+          type: "success",
+          message: t("cookieSubmit.browserImport.success", {
+            browser: response.browser,
+            profile: response.profile,
+          }),
+        });
+      } else {
+        const errorMsgs = response.errors?.length > 0
+          ? response.errors.join("; ")
+          : response.message || t("cookieSubmit.browserImport.notFound");
+        setOverallStatus({
+          type: "warning",
+          message: errorMsgs,
+        });
+      }
+    } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : "Unknown error";
+      setOverallStatus({
+        type: "error",
+        message: t("cookieSubmit.browserImport.error", { message: errorMessage }),
+      });
+    } finally {
+      setIsImporting(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -124,9 +162,27 @@ const CookieSubmitForm: React.FC = () => {
           disabled={isSubmitting}
         />
 
-        <p className="text-xs text-gray-400 mt-1">
-          {t("cookieSubmit.descriptionMulti")}
-        </p>
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-gray-400 mt-1">
+            {t("cookieSubmit.descriptionMulti")}
+          </p>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={handleImportFromBrowser}
+            disabled={isImporting || isSubmitting}
+            className="text-xs px-3 py-1"
+          >
+            {isImporting ? (
+              <span className="flex items-center gap-1">
+                <LoadingSpinner />
+                {t("cookieSubmit.browserImport.importing")}
+              </span>
+            ) : (
+              t("cookieSubmit.browserImport.button")
+            )}
+          </Button>
+        </div>
 
         {overallStatus.message && (
           <StatusMessage
