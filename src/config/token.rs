@@ -29,10 +29,16 @@ impl TokenInfo {
         raw: StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>,
         organization_uuid: String,
     ) -> Self {
-        let expires_at = Utc::now() + raw.expires_in().unwrap_or_default();
+        let expires_in_duration = raw.expires_in().unwrap_or_default();
+        let expires_at = Utc::now() + expires_in_duration;
+        tracing::info!(
+            "TokenInfo created - expires_in: {:?}, expires_at: {}",
+            expires_in_duration,
+            expires_at.to_rfc3339()
+        );
         Self {
             access_token: raw.access_token().secret().to_string(),
-            expires_in: raw.expires_in().unwrap_or_default(),
+            expires_in: expires_in_duration,
             organization: Organization {
                 uuid: organization_uuid,
             },

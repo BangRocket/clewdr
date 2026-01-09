@@ -3,7 +3,7 @@ use std::{collections::HashMap, pin::Pin, str::FromStr};
 use oauth2::{
     AsyncHttpClient, AuthUrl, AuthorizationCode, Client, ClientId, CsrfToken, EndpointNotSet,
     EndpointSet, HttpClientError, HttpRequest, HttpResponse, PkceCodeChallenge, PkceCodeVerifier,
-    RedirectUrl, Scope, StandardRevocableToken, TokenUrl,
+    RedirectUrl, Scope, StandardRevocableToken, TokenResponse, TokenUrl,
     basic::{
         BasicErrorResponse, BasicRevocationErrorResponse, BasicTokenIntrospectionResponse,
         BasicTokenResponse,
@@ -192,6 +192,12 @@ impl ClaudeCodeState {
         }
 
         let token = token_request.request_async(&my_client).await?;
+
+        tracing::info!(
+            "Token exchange successful - expires_in: {:?}, has_refresh: {}",
+            token.expires_in(),
+            token.refresh_token().is_some()
+        );
 
         if let Some(cookie) = self.cookie.as_mut() {
             cookie.token = Some(TokenInfo::new(token, code_res.org_uuid.clone()));
