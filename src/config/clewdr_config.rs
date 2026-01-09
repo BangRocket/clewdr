@@ -125,16 +125,6 @@ pub struct ClewdrConfig {
     #[serde(default)]
     pub custom_system: Option<String>,
 
-    // OAuth Admin Login settings
-    #[serde(default)]
-    pub github_client_id: Option<String>,
-    #[serde(default)]
-    pub github_client_secret: Option<String>,
-    #[serde(default)]
-    pub google_client_id: Option<String>,
-    #[serde(default)]
-    pub google_client_secret: Option<String>,
-
     // Skip field, can hot reload
     #[serde(skip)]
     pub wreq_proxy: Option<Proxy>,
@@ -172,10 +162,6 @@ impl Default for ClewdrConfig {
             custom_system: None,
             no_fs: false,
             log_to_file: false,
-            github_client_id: None,
-            github_client_secret: None,
-            google_client_id: None,
-            google_client_secret: None,
         }
     }
 }
@@ -253,21 +239,6 @@ impl ClewdrConfig {
             .as_deref()
             .unwrap_or(CC_CLIENT_ID)
             .to_string()
-    }
-
-    /// Check if GitHub OAuth is configured
-    pub fn github_oauth_configured(&self) -> bool {
-        self.github_client_id.is_some() && self.github_client_secret.is_some()
-    }
-
-    /// Check if Google OAuth is configured
-    pub fn google_oauth_configured(&self) -> bool {
-        self.google_client_id.is_some() && self.google_client_secret.is_some()
-    }
-
-    /// Check if any OAuth provider is configured
-    pub fn any_oauth_configured(&self) -> bool {
-        self.github_oauth_configured() || self.google_oauth_configured()
     }
 
     /// Loads configuration from files and environment variables
