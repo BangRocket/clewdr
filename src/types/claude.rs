@@ -224,6 +224,55 @@ impl CreateMessageParams {
         self.metadata = Some(metadata);
         self
     }
+
+    /// Prefix all tool names with "oc_" for OAuth authentication workaround
+    /// This is required because Anthropic validates tool names for OAuth tokens
+    pub fn prefix_tool_names(&mut self) {
+        const PREFIX: &str = "oc_";
+
+        // Prefix tool definitions
+        if let Some(tools) = &mut self.tools {
+            for tool in tools.iter_mut() {
+                match tool {
+                    Tool::Custom(custom) => {
+                        if !custom.name.starts_with(PREFIX) {
+                            custom.name = format!("{}{}", PREFIX, custom.name);
+                        }
+                    }
+                    Tool::Raw(value) => {
+                        if let Some(name) = value.get_mut("name").and_then(|n| n.as_str().map(String::from)) {
+                            if !name.starts_with(PREFIX) {
+                                value["name"] = serde_json::json!(format!("{}{}", PREFIX, name));
+                            }
+                        }
+                    }
+                    Tool::Known(_) => {
+                        // Known tools (bash, text_editor, etc.) don't need prefixing
+                    }
+                }
+            }
+        }
+
+        // Prefix tool_choice if it specifies a tool name
+        if let Some(ToolChoice::Tool { ref mut name, .. }) = self.tool_choice {
+            if !name.starts_with(PREFIX) {
+                *name = format!("{}{}", PREFIX, name);
+            }
+        }
+
+        // Prefix tool names in message history (ToolUse blocks)
+        for msg in self.messages.iter_mut() {
+            if let MessageContent::Blocks { content } = &mut msg.content {
+                for block in content.iter_mut() {
+                    if let ContentBlock::ToolUse { name, .. } = block {
+                        if !name.starts_with(PREFIX) {
+                            *name = format!("{}{}", PREFIX, name);
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Message in a conversation

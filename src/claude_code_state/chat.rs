@@ -23,6 +23,49 @@ const CLAUDE_BETA_CONTEXT_1M: &str = "oauth-2025-04-20,claude-code-20250219,inte
 const CLAUDE_USAGE_URL: &str = "https://api.anthropic.com/api/oauth/usage";
 const CLAUDE_CODE_USER_AGENT: &str = "claude-code/2.1.2";
 pub(super) const CLAUDE_API_VERSION: &str = "2023-06-01";
+const TOOL_NAME_PREFIX: &str = "oc_";
+
+/// Strip "oc_" prefix from tool names in streaming response data
+fn strip_tool_name_prefix(data: &str) -> String {
+    // Quick check - if no prefix present, return unchanged
+    if !data.contains(TOOL_NAME_PREFIX) {
+        return data.to_string();
+    }
+
+    // Parse JSON, strip prefix from tool names, re-serialize
+    if let Ok(mut json) = serde_json::from_str::<serde_json::Value>(data) {
+        strip_prefix_recursive(&mut json);
+        serde_json::to_string(&json).unwrap_or_else(|_| data.to_string())
+    } else {
+        data.to_string()
+    }
+}
+
+/// Recursively strip "oc_" prefix from "name" fields in tool_use blocks
+fn strip_prefix_recursive(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(map) => {
+            // Check if this is a tool_use block with a name field
+            if map.get("type").and_then(|v| v.as_str()) == Some("tool_use") {
+                if let Some(name) = map.get_mut("name").and_then(|n| n.as_str().map(String::from)) {
+                    if let Some(stripped) = name.strip_prefix(TOOL_NAME_PREFIX) {
+                        map.insert("name".to_string(), serde_json::json!(stripped));
+                    }
+                }
+            }
+            // Recurse into all values
+            for v in map.values_mut() {
+                strip_prefix_recursive(v);
+            }
+        }
+        serde_json::Value::Array(arr) => {
+            for v in arr.iter_mut() {
+                strip_prefix_recursive(v);
+            }
+        }
+        _ => {}
+    }
+}
 
 impl ClaudeCodeState {
     /// Attempts to send a chat message to Claude API with retry mechanism
@@ -183,13 +226,17 @@ impl ClaudeCodeState {
             CLAUDE_BETA_BASE
         };
 
+        // Clone and prefix tool names for OAuth workaround
+        let mut prefixed_body = body.clone();
+        prefixed_body.prefix_tool_names();
+
         self.client
             .post(self.endpoint.join("v1/messages").expect("Url parse error"))
             .bearer_auth(access_token)
             .header(USER_AGENT, CLAUDE_CODE_USER_AGENT)
             .header("anthropic-beta", beta_header)
             .header("anthropic-version", CLAUDE_API_VERSION)
-            .json(body)
+            .json(&prefixed_body)
             .send()
             .await
             .context(WreqSnafu {
@@ -498,14 +545,15 @@ impl ClaudeCodeState {
                     _ => {}
                 }
             }
-            // mirror upstream SSE event unchanged
+            // Strip "oc_" prefix from tool names in response
+            let data = strip_tool_name_prefix(&event.data);
             let e = SseEvent::default().event(event.event).id(event.id);
             let e = if let Some(retry) = event.retry {
                 e.retry(retry)
             } else {
                 e
             };
-            e.data(event.data)
+            e.data(data)
         });
 
         Ok(Sse::new(stream)
@@ -523,13 +571,21 @@ impl ClaudeCodeState {
         })?;
         let usage = Self::extract_usage_from_bytes(&bytes);
 
+        // Strip "oc_" prefix from tool names in response
+        let body_str = String::from_utf8_lossy(&bytes);
+        let stripped = strip_tool_name_prefix(&body_str);
+        let body_bytes = stripped.into_bytes();
+
         let mut builder = http::Response::builder().status(status);
         for (key, value) in headers.iter() {
-            builder = builder.header(key, value);
+            // Skip content-length since we may have changed the body size
+            if key != http::header::CONTENT_LENGTH {
+                builder = builder.header(key, value);
+            }
         }
         let response =
             builder
-                .body(axum::body::Body::from(bytes))
+                .body(axum::body::Body::from(body_bytes))
                 .map_err(|e| ClewdrError::HttpError {
                     loc: snafu::Location::generate(),
                     source: e,
