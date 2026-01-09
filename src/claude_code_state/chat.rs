@@ -18,8 +18,8 @@ use crate::{
     types::claude::{CountMessageTokensResponse, CreateMessageParams},
 };
 
-pub(super) const CLAUDE_BETA_BASE: &str = "oauth-2025-04-20";
-const CLAUDE_BETA_CONTEXT_1M: &str = "oauth-2025-04-20,context-1m-2025-08-07";
+pub(super) const CLAUDE_BETA_BASE: &str = "oauth-2025-04-20,claude-code-20250219,interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14";
+const CLAUDE_BETA_CONTEXT_1M: &str = "oauth-2025-04-20,claude-code-20250219,interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14,context-1m-2025-08-07";
 const CLAUDE_USAGE_URL: &str = "https://api.anthropic.com/api/oauth/usage";
 const CLAUDE_CODE_USER_AGENT: &str = "claude-code/2.1.2";
 pub(super) const CLAUDE_API_VERSION: &str = "2023-06-01";
