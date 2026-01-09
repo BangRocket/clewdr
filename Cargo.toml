@@ -29,7 +29,8 @@ serde_json = "1"
 const_format = { version = "0.2", features = ["fmt"] }
 serde = { version = "1", features = ["derive"] }
 colored = "3"
-axum = { version = "0.8", features = ["macros"] }
+axum = { version = "0.8", features = ["macros", "ws"] }
+notify = { version = "8", default-features = false, features = ["macos_kqueue"] }
 regex = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "=0.3.19", features = [

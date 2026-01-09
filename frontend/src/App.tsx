@@ -2,14 +2,14 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import "./App.css";
-import MainLayout from "./components/layout/MainLayout";
+import DashboardLayout from "./components/layout/DashboardLayout";
 import Card from "./components/common/Card";
-import TabNavigation from "./components/common/TabNavigation";
 import AuthGatekeeper from "./components/auth/AuthGatekeeper";
 import LogoutPanel from "./components/auth/LogoutPanel";
 import ClaudeTabs from "./components/claude";
 import ConfigTab from "./components/config";
 import LogsTab from "./components/console";
+import Dashboard from "./components/dashboard";
 import StatusMessage from "./components/common/StatusMessage";
 import ErrorBoundary from "./components/common/ErrorBoundary";
 import { useAppContext } from "./context/AppContext";
@@ -47,42 +47,30 @@ function App() {
     setIsAuthenticated(false);
   };
 
-  // Define tabs for the authenticated user
-  const tabs = [
-    { id: "claude", label: t("tabs.claude"), color: "cyan" },
-    { id: "config", label: t("tabs.config"), color: "green" },
-    { id: "logs", label: t("tabs.logs"), color: "amber" },
-    { id: "token", label: t("tabs.auth"), color: "violet" },
-  ];
+  // Render section based on active section
+  const renderSection = () => {
+    switch (activeTab) {
+      case "dashboard":
+        return <Dashboard />;
+      case "cookies":
+        return <ClaudeTabs />;
+      case "config":
+        return <ConfigTab />;
+      case "logs":
+        return <LogsTab />;
+      case "auth":
+        return <LogoutPanel onLogout={handleLogout} />;
+      default:
+        return <Dashboard />;
+    }
+  };
 
-  return (
-    <ErrorBoundary>
-      <MainLayout version={version}>
-        {isAuthenticated ? (
-          // Protected content - only shown when authenticated
-          <Card className="w-full max-w-md sm:max-w-lg md:max-w-xl mx-auto">
-            <TabNavigation
-              tabs={tabs}
-              activeTab={activeTab}
-              onTabChange={(tabId) => setActiveTab(tabId)}
-              className="mb-6"
-            />
-
-            <ErrorBoundary>
-              {activeTab === "claude" ? (
-                <ClaudeTabs />
-              ) : activeTab === "config" ? (
-                <ConfigTab />
-              ) : activeTab === "logs" ? (
-                <LogsTab />
-              ) : (
-                <LogoutPanel onLogout={handleLogout} />
-              )}
-            </ErrorBoundary>
-          </Card>
-        ) : (
-          // Auth gatekeeper - shown when not authenticated
-          <Card className="w-full max-w-md sm:max-w-lg md:max-w-xl mx-auto">
+  // If not authenticated, show login screen
+  if (!isAuthenticated) {
+    return (
+      <ErrorBoundary>
+        <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 text-white flex items-center justify-center p-4">
+          <Card className="w-full max-w-md">
             <h2 className="text-xl font-semibold text-center mb-6">
               {t("auth.title")}
             </h2>
@@ -99,8 +87,21 @@ function App() {
               <AuthGatekeeper onAuthenticated={handleAuthenticated} />
             </ErrorBoundary>
           </Card>
-        )}
-      </MainLayout>
+        </div>
+      </ErrorBoundary>
+    );
+  }
+
+  // Authenticated view with dashboard layout
+  return (
+    <ErrorBoundary>
+      <DashboardLayout
+        version={version}
+        activeSection={activeTab}
+        onSectionChange={setActiveTab}
+      >
+        <ErrorBoundary>{renderSection()}</ErrorBoundary>
+      </DashboardLayout>
     </ErrorBoundary>
   );
 }

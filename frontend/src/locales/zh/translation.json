@@ -4,6 +4,40 @@
     "footer": "© {{year}} ClewdR - 版权所有",
     "buyMeCoffee": "请我喝杯咖啡"
   },
+  "sidebar": {
+    "dashboard": "仪表盘",
+    "cookies": "Cookies",
+    "logs": "完整日志",
+    "config": "配置",
+    "auth": "认证状态",
+    "version": "ClewdR"
+  },
+  "dashboard": {
+    "usageSummary": "使用概览",
+    "quotaUsage": "配额使用",
+    "quickActions": "快捷操作",
+    "totalCookies": "Cookie总数",
+    "validCookies": "有效",
+    "inUseCookies": "使用中",
+    "exhaustedCookies": "冷却中",
+    "invalidCookies": "无效",
+    "noQuotaData": "暂无配额数据",
+    "submitCookie": "提交Cookie",
+    "searchLogs": "搜索日志...",
+    "noMatchingLogs": "未找到匹配的日志",
+    "oauth": {
+      "title": "OAuth 状态",
+      "noTokens": "无 OAuth 令牌",
+      "allValid": "{{count}} 个有效令牌",
+      "allExpired": "所有令牌已过期",
+      "someExpired": "{{valid}} 个有效，{{expired}} 个已过期",
+      "totalTokens": "共 {{count}} 个令牌",
+      "expired": "已过期",
+      "expiresIn": "{{hours}}小时{{minutes}}分钟后过期",
+      "expiresMinutes": "{{minutes}}分钟后过期",
+      "andMore": "还有 {{count}} 个"
+    }
+  },
   "auth": {
     "title": "需要认证",
     "description": "请使用您的认证令牌登录以访问ClewdR功能。",

@@ -4,6 +4,40 @@
     "footer": "© {{year}} ClewdR - All rights reserved",
     "buyMeCoffee": "Buy me a coffee"
   },
+  "sidebar": {
+    "dashboard": "Dashboard",
+    "cookies": "Cookies",
+    "logs": "Full Logs",
+    "config": "Configuration",
+    "auth": "Auth Status",
+    "version": "ClewdR"
+  },
+  "dashboard": {
+    "usageSummary": "Usage Summary",
+    "quotaUsage": "Quota Usage",
+    "quickActions": "Quick Actions",
+    "totalCookies": "Total Cookies",
+    "validCookies": "Valid",
+    "inUseCookies": "In Use",
+    "exhaustedCookies": "Exhausted",
+    "invalidCookies": "Invalid",
+    "noQuotaData": "No quota data available",
+    "submitCookie": "Submit Cookie",
+    "searchLogs": "Search logs...",
+    "noMatchingLogs": "No matching logs found",
+    "oauth": {
+      "title": "OAuth Status",
+      "noTokens": "No OAuth tokens",
+      "allValid": "{{count}} valid tokens",
+      "allExpired": "All tokens expired",
+      "someExpired": "{{valid}} valid, {{expired}} expired",
+      "totalTokens": "{{count}} total tokens",
+      "expired": "Expired",
+      "expiresIn": "{{hours}}h {{minutes}}m",
+      "expiresMinutes": "{{minutes}}m",
+      "andMore": "+{{count}} more"
+    }
+  },
   "auth": {
     "title": "Authentication Required",
     "description": "Please log in with your auth token to access ClewdR features.",
