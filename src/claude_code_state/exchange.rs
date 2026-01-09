@@ -19,7 +19,7 @@ use url::Url;
 
 use crate::{
     claude_code_state::ClaudeCodeState,
-    config::{CC_REDIRECT_URI, CC_TOKEN_URL, CLEWDR_CONFIG, CookieStatus, TokenInfo},
+    config::{CC_AUTH_BASE_URL, CC_REDIRECT_URI, CC_TOKEN_URL, CLEWDR_CONFIG, CookieStatus, TokenInfo},
     error::{CheckClaudeErr, ClewdrError, UnexpectedNoneSnafu, UrlSnafu, WreqSnafu},
 };
 
@@ -109,11 +109,10 @@ fn setup_client(cc_client_id: String) -> Result<ClaudeOauthClient, ClewdrError> 
 
 impl ClaudeCodeState {
     pub async fn exchange_code(&self, org_uuid: &str) -> Result<ExchangeResult, ClewdrError> {
-        // Build OAuth authorization URL using Url::join for proper URL construction
-        let authorize_url = CLEWDR_CONFIG
-            .load()
-            .endpoint()
-            .join(&format!("v1/oauth/{}/authorize", org_uuid))
+        // Build OAuth authorization URL using claude.ai (not api.anthropic.com)
+        let authorize_url = Url::parse(CC_AUTH_BASE_URL)
+            .expect("Invalid CC_AUTH_BASE_URL")
+            .join(&format!("/v1/oauth/{}/authorize", org_uuid))
             .expect("Url parse error");
         let cc_client_id = CLEWDR_CONFIG.load().cc_client_id();
 
