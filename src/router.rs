@@ -101,12 +101,15 @@ impl RouterBuilder {
             .route("/config", get(api_get_config).post(api_post_config))
             .route("/logs", get(api_get_logs))
             .route("/browser-cookie", get(api_get_browser_session_cookie));
+        // WebSocket endpoint (authentication is handled within the handler via query param)
+        let ws_router = Router::new().route("/ws/logs", get(api_ws_logs));
         let router = Router::new()
             .nest(
                 "/api",
                 cookie_router
                     .merge(admin_router)
-                    .layer(from_extractor::<RequireAdminAuth>()),
+                    .layer(from_extractor::<RequireAdminAuth>())
+                    .merge(ws_router),
             )
             .route("/api/version", get(api_version));
         self.inner = self.inner.merge(router);
