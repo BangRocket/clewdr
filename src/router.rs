@@ -103,13 +103,23 @@ impl RouterBuilder {
             .route("/browser-cookie", get(api_get_browser_session_cookie));
         // WebSocket endpoint (authentication is handled within the handler via query param)
         let ws_router = Router::new().route("/ws/logs", get(api_ws_logs));
+        // OAuth admin login routes (public - no auth required)
+        let oauth_router = Router::new()
+            .route("/auth/oauth/providers", get(api_oauth_providers))
+            .route("/auth/oauth/github", get(api_oauth_github_login))
+            .route("/auth/oauth/google", get(api_oauth_google_login))
+            .route("/auth/oauth/github/callback", get(api_oauth_github_callback))
+            .route("/auth/oauth/google/callback", get(api_oauth_google_callback))
+            .route("/auth/oauth/validate", get(api_oauth_validate))
+            .route("/auth/oauth/logout", post(api_oauth_logout));
         let router = Router::new()
             .nest(
                 "/api",
                 cookie_router
                     .merge(admin_router)
                     .layer(from_extractor::<RequireAdminAuth>())
-                    .merge(ws_router),
+                    .merge(ws_router)
+                    .merge(oauth_router),
             )
             .route("/api/version", get(api_version));
         self.inner = self.inner.merge(router);

@@ -54,7 +54,14 @@
     "authTitle": "认证状态",
     "loggedInMessage": "您当前已登录，可以访问所有功能。",
     "logout": "登出",
-    "passwordChanged": "注意：由于您的密码已更改，您已被登出。请使用新的凭据登录。"
+    "passwordChanged": "注意：由于您的密码已更改，您已被登出。请使用新的凭据登录。",
+    "oauthDescription": "使用您的账户登录",
+    "loginWithGitHub": "使用 GitHub 登录",
+    "loginWithGoogle": "使用 Google 登录",
+    "or": "或使用令牌",
+    "oauthSuccess": "OAuth 登录成功！",
+    "oauthError": "OAuth 登录失败：{{error}}",
+    "tokenCleared": "令牌已清除"
   },
   "tabs": {
     "claude": "Claude",

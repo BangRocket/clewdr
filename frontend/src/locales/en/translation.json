@@ -54,7 +54,14 @@
     "authTitle": "Auth Status",
     "loggedInMessage": "You are currently logged in and have access to all features.",
     "logout": "Logout",
-    "passwordChanged": "Note: You have been logged out because your password was changed. Please log in with your new credentials."
+    "passwordChanged": "Note: You have been logged out because your password was changed. Please log in with your new credentials.",
+    "oauthDescription": "Sign in with your account",
+    "loginWithGitHub": "Continue with GitHub",
+    "loginWithGoogle": "Continue with Google",
+    "or": "or use token",
+    "oauthSuccess": "OAuth login successful!",
+    "oauthError": "OAuth login failed: {{error}}",
+    "tokenCleared": "Token cleared"
   },
   "tabs": {
     "claude": "Claude",
