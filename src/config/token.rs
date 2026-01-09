@@ -24,12 +24,19 @@ pub struct TokenInfo {
     pub expires_at: DateTime<Utc>,
 }
 
+/// Default token expiry: 1 hour (Claude Code OAuth tokens typically last 1 hour)
+const DEFAULT_TOKEN_EXPIRY_SECS: u64 = 3600;
+
 impl TokenInfo {
     pub fn new(
         raw: StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>,
         organization_uuid: String,
     ) -> Self {
-        let expires_in_duration = raw.expires_in().unwrap_or_default();
+        // Use provided expires_in, or default to 1 hour if not provided
+        let expires_in_duration = raw
+            .expires_in()
+            .filter(|d| d.as_secs() > 0)
+            .unwrap_or(Duration::from_secs(DEFAULT_TOKEN_EXPIRY_SECS));
         let expires_at = Utc::now() + expires_in_duration;
         tracing::info!(
             "TokenInfo created - expires_in: {:?}, expires_at: {}",
