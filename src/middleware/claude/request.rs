@@ -209,7 +209,7 @@ where
             .and_then(|v| v.to_str().ok())
             .unwrap_or_default()
             .to_lowercase();
-        let is_from_cc = ua.contains("claude-code") || ua.contains("claude-cli");
+        let _is_from_cc = ua.contains("claude-code") || ua.contains("claude-cli");
         let NormalizeRequest(mut body, format) = NormalizeRequest::from_request(req, &()).await?;
         // Handle thinking mode by modifying the model name
         if (body.model.contains("opus-4-1")
@@ -232,9 +232,9 @@ where
         // Determine streaming status and API format
         let stream = body.stream.unwrap_or_default();
 
-        // If the request is not from Claude Code, add a prelude to the system messages
-        if !is_from_cc {
-            // Add a prelude text block to the system messages
+        // Always add a prelude to the system messages for OAuth authentication
+        // (Clove does this for all requests, which may be required by the API)
+        {
             const PRELUDE_TEXT: &str = "You are Claude Code, Anthropic's official CLI for Claude.";
             let prelude_blk = ContentBlock::Text {
                 text: CLEWDR_CONFIG
