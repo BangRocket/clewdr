@@ -121,6 +121,9 @@ async fn main() -> Result<(), ClewdrError> {
     println!("Config dir: {}", CONFIG_PATH.display().to_string().blue());
     println!("{}", *CLEWDR_CONFIG);
 
+    // Initialize MCP router
+    clewdr::mcp::init_mcp_router().await;
+
     // build axum router
     // create a TCP listener
     let addr = CLEWDR_CONFIG.load().address();
@@ -135,6 +138,8 @@ async fn main() -> Result<(), ClewdrError> {
             tokio::signal::ctrl_c()
                 .await
                 .expect("Failed to install Ctrl-C handler");
+            // Shutdown MCP connections on exit
+            clewdr::mcp::shutdown_mcp().await;
         })
         .await?)
 }
