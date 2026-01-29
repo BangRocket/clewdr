@@ -119,8 +119,13 @@ impl ToolRegistry {
                     name: t.qualified_name.clone(),
                     description: t.tool.description.clone(),
                     input_schema: t.tool.input_schema.clone(),
+                    allowed_callers: None,
                     cache_control: None,
+                    defer_loading: None,
+                    input_examples: None,
+                    strict: None,
                     type_: None,
+                    extra: std::collections::HashMap::new(),
                 })
             })
             .collect()
@@ -137,8 +142,13 @@ impl ToolRegistry {
                     name: t.tool.name.clone(), // Use short name for server-specific tools
                     description: t.tool.description.clone(),
                     input_schema: t.tool.input_schema.clone(),
+                    allowed_callers: None,
                     cache_control: None,
+                    defer_loading: None,
+                    input_examples: None,
+                    strict: None,
                     type_: None,
+                    extra: std::collections::HashMap::new(),
                 })
             })
             .collect()

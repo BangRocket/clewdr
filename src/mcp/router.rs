@@ -116,7 +116,7 @@ impl ToolRouter {
         let mut results = Vec::new();
 
         for block in content_blocks {
-            if let ContentBlock::ToolUse { id, name, input } = block {
+            if let ContentBlock::ToolUse { id, name, input, .. } = block {
                 if let Some(exec_result) = self.execute_if_mcp(name, Some(input.clone())).await {
                     let content = match exec_result {
                         Ok(value) => value,
@@ -129,6 +129,8 @@ impl ToolRouter {
                     results.push(ContentBlock::ToolResult {
                         tool_use_id: id.clone(),
                         content,
+                        cache_control: None,
+                        is_error: None,
                     });
                 }
             }
