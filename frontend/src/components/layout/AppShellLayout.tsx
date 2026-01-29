@@ -5,14 +5,14 @@ import {
   AppShell,
   Burger,
   Group,
-  NavLink,
   Text,
   useMantineColorScheme,
   ActionIcon,
   Tooltip,
   Box,
   Anchor,
-  Divider,
+  Stack,
+  UnstyledButton,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import {
@@ -24,6 +24,10 @@ import {
   IconSun,
   IconMoon,
   IconLanguage,
+  IconLayoutDashboard,
+  IconDatabase,
+  IconActivity,
+  IconUser,
 } from "@tabler/icons-react";
 
 interface AppShellLayoutProps {
@@ -37,15 +41,44 @@ interface NavItem {
   id: string;
   labelKey: string;
   icon: typeof IconChartBar;
-  color: string;
 }
 
-const navItems: NavItem[] = [
-  { id: "dashboard", labelKey: "sidebar.dashboard", icon: IconChartBar, color: "cyan" },
-  { id: "cookies", labelKey: "sidebar.cookies", icon: IconCookie, color: "yellow" },
-  { id: "logs", labelKey: "sidebar.logs", icon: IconTerminal2, color: "violet" },
-  { id: "config", labelKey: "sidebar.config", icon: IconSettings, color: "green" },
-  { id: "auth", labelKey: "sidebar.auth", icon: IconKey, color: "grape" },
+interface NavSection {
+  titleKey: string;
+  icon: typeof IconLayoutDashboard;
+  items: NavItem[];
+}
+
+const navSections: NavSection[] = [
+  {
+    titleKey: "sidebar.sections.overview",
+    icon: IconLayoutDashboard,
+    items: [
+      { id: "dashboard", labelKey: "sidebar.dashboard", icon: IconChartBar },
+    ],
+  },
+  {
+    titleKey: "sidebar.sections.management",
+    icon: IconDatabase,
+    items: [
+      { id: "cookies", labelKey: "sidebar.cookies", icon: IconCookie },
+      { id: "config", labelKey: "sidebar.config", icon: IconSettings },
+    ],
+  },
+  {
+    titleKey: "sidebar.sections.monitoring",
+    icon: IconActivity,
+    items: [
+      { id: "logs", labelKey: "sidebar.logs", icon: IconTerminal2 },
+    ],
+  },
+  {
+    titleKey: "sidebar.sections.account",
+    icon: IconUser,
+    items: [
+      { id: "auth", labelKey: "sidebar.auth", icon: IconKey },
+    ],
+  },
 ];
 
 export function AppShellLayout({
@@ -67,7 +100,7 @@ export function AppShellLayout({
     <AppShell
       header={{ height: 60 }}
       navbar={{
-        width: 260,
+        width: 240,
         breakpoint: "sm",
         collapsed: { mobile: !mobileOpened },
       }}
@@ -81,13 +114,13 @@ export function AppShellLayout({
               onClick={toggleMobile}
               hiddenFrom="sm"
               size="sm"
+              color="white"
             />
             <Text
               component="h1"
               size="xl"
               fw={700}
-              variant="gradient"
-              gradient={{ from: "cyan", to: "violet", deg: 90 }}
+              className="gradient-text"
             >
               {t("app.title")}
             </Text>
@@ -99,6 +132,7 @@ export function AppShellLayout({
             <Tooltip label={t("settings.language")}>
               <ActionIcon
                 variant="subtle"
+                color="gray"
                 onClick={() => {
                   const nextLang = i18n.language === "en" ? "zh" : "en";
                   i18n.changeLanguage(nextLang);
@@ -110,7 +144,7 @@ export function AppShellLayout({
             <Tooltip
               label={colorScheme === "dark" ? t("theme.light") : t("theme.dark")}
             >
-              <ActionIcon variant="subtle" onClick={() => toggleColorScheme()}>
+              <ActionIcon variant="subtle" color="gray" onClick={() => toggleColorScheme()}>
                 {colorScheme === "dark" ? (
                   <IconSun size={20} />
                 ) : (
@@ -122,30 +156,47 @@ export function AppShellLayout({
         </Group>
       </AppShell.Header>
 
-      <AppShell.Navbar p="md">
-        <AppShell.Section grow>
-          {navItems.map((item) => (
-            <NavLink
-              key={item.id}
-              active={activeSection === item.id}
-              label={t(item.labelKey)}
-              leftSection={<item.icon size={20} />}
-              onClick={() => handleNavClick(item.id)}
-              color={item.color}
-              variant="light"
-              mb={4}
-              style={{ borderRadius: "var(--mantine-radius-md)" }}
-            />
-          ))}
-        </AppShell.Section>
+      <AppShell.Navbar p={0}>
+        <Stack gap={0} style={{ height: "100%" }}>
+          {/* Navigation Sections */}
+          <Box style={{ flex: 1, overflowY: "auto" }} py="md">
+            {navSections.map((section) => (
+              <Box key={section.titleKey} mb="sm">
+                {/* Section Header */}
+                <Box className="nav-section-header">
+                  <section.icon size={14} />
+                  <span>{t(section.titleKey)}</span>
+                </Box>
 
-        <Divider my="sm" />
+                {/* Section Items */}
+                {section.items.map((item) => (
+                  <UnstyledButton
+                    key={item.id}
+                    className={`nav-item ${activeSection === item.id ? "active" : ""}`}
+                    onClick={() => handleNavClick(item.id)}
+                    w="100%"
+                  >
+                    <Group gap="sm">
+                      <item.icon size={18} style={{ opacity: 0.8 }} />
+                      <Text size="sm">{t(item.labelKey)}</Text>
+                    </Group>
+                  </UnstyledButton>
+                ))}
+              </Box>
+            ))}
+          </Box>
 
-        <AppShell.Section>
-          <Text size="xs" c="dimmed" ta="center">
-            {t("sidebar.version")}
-          </Text>
-        </AppShell.Section>
+          {/* Footer */}
+          <Box
+            py="md"
+            px="md"
+            style={{ borderTop: "1px solid var(--card-border)" }}
+          >
+            <Text size="xs" c="dimmed" ta="center">
+              {t("sidebar.version")}
+            </Text>
+          </Box>
+        </Stack>
       </AppShell.Navbar>
 
       <AppShell.Main>
@@ -154,7 +205,7 @@ export function AppShellLayout({
           component="footer"
           py="md"
           mt="md"
-          style={{ borderTop: "1px solid var(--mantine-color-default-border)" }}
+          style={{ borderTop: "1px solid var(--card-border)" }}
         >
           <Group justify="center" gap="xs">
             <Text size="sm" c="dimmed">

@@ -10,7 +10,13 @@
     "logs": "完整日志",
     "config": "配置",
     "auth": "认证状态",
-    "version": "ClewdR"
+    "version": "ClewdR",
+    "sections": {
+      "overview": "概览",
+      "management": "管理",
+      "monitoring": "监控",
+      "account": "账户"
+    }
   },
   "dashboard": {
     "usageSummary": "使用概览",

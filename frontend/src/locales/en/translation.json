@@ -10,7 +10,13 @@
     "logs": "Full Logs",
     "config": "Configuration",
     "auth": "Auth Status",
-    "version": "ClewdR"
+    "version": "ClewdR",
+    "sections": {
+      "overview": "Overview",
+      "management": "Management",
+      "monitoring": "Monitoring",
+      "account": "Account"
+    }
   },
   "dashboard": {
     "usageSummary": "Usage Summary",

@@ -1,4 +1,4 @@
-/* Base styles - Mantine handles most styling */
+/* Base styles - CRM Dashboard inspired dark theme */
 :root {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   line-height: 1.5;
@@ -8,13 +8,152 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  /* Custom CSS variables for the dark dashboard theme */
+  --dashboard-bg: #0f1225;
+  --sidebar-bg: #1a1f37;
+  --card-bg: rgba(26, 31, 55, 0.8);
+  --card-bg-solid: #1a1f37;
+  --card-border: rgba(255, 255, 255, 0.08);
+  --glass-overlay: rgba(255, 255, 255, 0.03);
+  --accent-cyan: #22d3ee;
+  --accent-violet: #a78bfa;
+  --accent-magenta: #f472b6;
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --text-muted: rgba(255, 255, 255, 0.5);
 }
 
-/* Ensure body fills viewport */
+/* Ensure body fills viewport with dark background */
 html, body, #root {
   height: 100%;
   margin: 0;
   padding: 0;
+  background: var(--dashboard-bg);
+}
+
+/* Override Mantine's default dark theme background */
+.mantine-AppShell-root {
+  background: var(--dashboard-bg) !important;
+}
+
+.mantine-AppShell-main {
+  background: var(--dashboard-bg) !important;
+}
+
+.mantine-AppShell-navbar {
+  background: var(--sidebar-bg) !important;
+  border-right: 1px solid var(--card-border) !important;
+}
+
+.mantine-AppShell-header {
+  background: var(--sidebar-bg) !important;
+  border-bottom: 1px solid var(--card-border) !important;
+}
+
+/* Glassmorphism card style */
+.glass-card {
+  background: var(--card-bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+}
+
+.glass-card:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4);
+}
+
+/* Gradient stat cards */
+.stat-card-cyan {
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.2) 0%, rgba(6, 182, 212, 0.1) 100%);
+  border: 1px solid rgba(34, 211, 238, 0.3);
+}
+
+.stat-card-violet {
+  background: linear-gradient(135deg, rgba(167, 139, 250, 0.2) 0%, rgba(139, 92, 246, 0.1) 100%);
+  border: 1px solid rgba(167, 139, 250, 0.3);
+}
+
+.stat-card-magenta {
+  background: linear-gradient(135deg, rgba(244, 114, 182, 0.2) 0%, rgba(236, 72, 153, 0.1) 100%);
+  border: 1px solid rgba(244, 114, 182, 0.3);
+}
+
+.stat-card-green {
+  background: linear-gradient(135deg, rgba(52, 211, 153, 0.2) 0%, rgba(16, 185, 129, 0.1) 100%);
+  border: 1px solid rgba(52, 211, 153, 0.3);
+}
+
+/* Sidebar nav section headers */
+.nav-section-header {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 12px 16px 8px;
+  color: var(--accent-cyan);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nav-section-header svg {
+  opacity: 0.8;
+}
+
+/* Nav items with active indicator */
+.nav-item {
+  position: relative;
+  padding: 10px 16px 10px 24px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-radius: 0;
+  margin: 0;
+}
+
+.nav-item:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.nav-item.active {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 24px;
+  background: var(--accent-cyan);
+  border-radius: 0 4px 4px 0;
+}
+
+/* Badge styling */
+.status-badge {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-badge.new {
+  background: var(--accent-cyan);
+  color: #0f1225;
+}
+
+.status-badge.warning {
+  background: var(--accent-magenta);
+  color: #0f1225;
 }
 
 /* Pulse animation for live indicators */
@@ -25,4 +164,57 @@ html, body, #root {
   50% {
     opacity: 0.5;
   }
+}
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(90deg, var(--accent-cyan), var(--accent-violet));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Chart container styling */
+.chart-container {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  padding: 20px;
+}
+
+/* Custom scrollbar for dark theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--dashboard-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Override Mantine Paper/Card backgrounds */
+.mantine-Paper-root,
+.mantine-Card-root {
+  background: var(--card-bg-solid) !important;
+  border: 1px solid var(--card-border) !important;
+}
+
+/* Smooth transitions */
+* {
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Login page styling */
+.login-container {
+  background: radial-gradient(ellipse at top, #1a1f37 0%, #0f1225 100%);
+  min-height: 100vh;
 }

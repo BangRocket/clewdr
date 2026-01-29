@@ -1,7 +1,6 @@
 // frontend/src/components/dashboard/TokenCostCalculator.tsx
 import { useTranslation } from "react-i18next";
 import {
-  Paper,
   Text,
   Group,
   Stack,
@@ -10,31 +9,28 @@ import {
   Tooltip,
   ThemeIcon,
   Skeleton,
+  Box,
 } from "@mantine/core";
 import { IconCurrencyDollar, IconInfoCircle } from "@tabler/icons-react";
 
-// Claude model pricing per million tokens (as of 2024)
+// Claude 4.5 model family pricing per million tokens (2025)
 const MODEL_PRICING = {
-  "claude-3-opus": { input: 15.0, output: 75.0 },
-  "claude-3-sonnet": { input: 3.0, output: 15.0 },
-  "claude-3-haiku": { input: 0.25, output: 1.25 },
-  "claude-3.5-sonnet": { input: 3.0, output: 15.0 },
-  "claude-3.5-haiku": { input: 0.8, output: 4.0 },
-  "claude-sonnet-4": { input: 3.0, output: 15.0 },
-  "claude-opus-4": { input: 15.0, output: 75.0 },
+  "claude-opus-4.5": { input: 15.0, output: 75.0, color: "violet" },
+  "claude-sonnet-4.5": { input: 3.0, output: 15.0, color: "cyan" },
+  "claude-haiku-4.5": { input: 0.8, output: 4.0, color: "green" },
+  // Legacy models for reference
+  "claude-3-opus": { input: 15.0, output: 75.0, color: "grape" },
+  "claude-3.5-sonnet": { input: 3.0, output: 15.0, color: "blue" },
+  "claude-3.5-haiku": { input: 0.8, output: 4.0, color: "teal" },
 } as const;
 
-interface TokenUsage {
-  model: string;
-  inputTokens: number;
-  outputTokens: number;
-  timestamp?: string;
-}
-
 interface TokenCostCalculatorProps {
-  usage?: TokenUsage[];
   totalInputTokens?: number;
   totalOutputTokens?: number;
+  sonnetInputTokens?: number;
+  sonnetOutputTokens?: number;
+  opusInputTokens?: number;
+  opusOutputTokens?: number;
   isLoading?: boolean;
 }
 
@@ -61,7 +57,7 @@ function calculateCost(
   outputTokens: number
 ): { inputCost: number; outputCost: number; totalCost: number } {
   const pricing = MODEL_PRICING[model as keyof typeof MODEL_PRICING] ||
-    MODEL_PRICING["claude-3.5-sonnet"]; // Default fallback
+    MODEL_PRICING["claude-sonnet-4.5"]; // Default fallback
 
   const inputCost = (inputTokens / 1_000_000) * pricing.input;
   const outputCost = (outputTokens / 1_000_000) * pricing.output;
@@ -74,9 +70,12 @@ function calculateCost(
 }
 
 export function TokenCostCalculator({
-  usage = [],
   totalInputTokens = 0,
   totalOutputTokens = 0,
+  sonnetInputTokens = 0,
+  sonnetOutputTokens = 0,
+  opusInputTokens = 0,
+  opusOutputTokens = 0,
   isLoading,
 }: TokenCostCalculatorProps) {
   const { t } = useTranslation();
@@ -90,48 +89,46 @@ export function TokenCostCalculator({
     );
   }
 
-  // Calculate totals from usage array or use provided totals
-  let inputTotal = totalInputTokens;
-  let outputTotal = totalOutputTokens;
+  // Use model-specific tokens if available, otherwise use totals
+  const inputTotal = totalInputTokens;
+  const outputTotal = totalOutputTokens;
 
-  if (usage.length > 0) {
-    inputTotal = usage.reduce((sum, u) => sum + u.inputTokens, 0);
-    outputTotal = usage.reduce((sum, u) => sum + u.outputTokens, 0);
-  }
-
-  // Default to claude-3.5-sonnet for cost estimation if no specific model
-  const defaultModel = "claude-3.5-sonnet";
+  // Calculate costs for the default model (Sonnet 4.5)
+  const defaultModel = "claude-sonnet-4.5";
   const { inputCost, outputCost, totalCost } = calculateCost(
     defaultModel,
     inputTotal,
     outputTotal
   );
 
+  // Calculate model-specific costs if we have the data
+  const sonnetCost = calculateCost("claude-sonnet-4.5", sonnetInputTokens, sonnetOutputTokens);
+  const opusCost = calculateCost("claude-opus-4.5", opusInputTokens, opusOutputTokens);
+
   const hasData = inputTotal > 0 || outputTotal > 0;
+  const hasModelSpecific = sonnetInputTokens > 0 || opusInputTokens > 0;
 
   return (
     <Stack gap="md">
-      {/* Summary Cards */}
-      <Group grow>
-        <Paper p="md" radius="md" withBorder>
-          <Group gap="xs" mb="xs">
-            <ThemeIcon size="sm" variant="light" color="blue" radius="xl">
-              <IconCurrencyDollar size={14} />
-            </ThemeIcon>
-            <Text size="xs" c="dimmed" tt="uppercase" fw={500}>
-              {t("dashboard.tokenCost.estimatedCost")}
-            </Text>
-            <Tooltip label={t("dashboard.tokenCost.basedOnSonnet")}>
-              <ThemeIcon size="xs" variant="subtle" color="gray">
-                <IconInfoCircle size={12} />
-              </ThemeIcon>
-            </Tooltip>
-          </Group>
-          <Text size="xl" fw={700} c="green">
-            {hasData ? formatCurrency(totalCost) : "-"}
+      {/* Summary Card */}
+      <Box className="stat-card-green" p="md" style={{ borderRadius: 12 }}>
+        <Group gap="xs" mb="xs">
+          <ThemeIcon size="sm" variant="light" color="green" radius="xl">
+            <IconCurrencyDollar size={14} />
+          </ThemeIcon>
+          <Text size="xs" c="dimmed" tt="uppercase" fw={500}>
+            {t("dashboard.tokenCost.estimatedCost")}
           </Text>
-        </Paper>
-      </Group>
+          <Tooltip label={t("dashboard.tokenCost.basedOnSonnet")}>
+            <ThemeIcon size="xs" variant="subtle" color="gray">
+              <IconInfoCircle size={12} />
+            </ThemeIcon>
+          </Tooltip>
+        </Group>
+        <Text size="xl" fw={700} c="white">
+          {hasData ? formatCurrency(totalCost) : "-"}
+        </Text>
+      </Box>
 
       {/* Token Breakdown */}
       <Table withTableBorder withColumnBorders>
@@ -150,7 +147,7 @@ export function TokenCostCalculator({
           <Table.Tr>
             <Table.Td>
               <Group gap="xs">
-                <Badge size="sm" variant="light" color="blue">
+                <Badge size="sm" variant="light" color="cyan">
                   Input
                 </Badge>
               </Group>
@@ -193,7 +190,66 @@ export function TokenCostCalculator({
         </Table.Tbody>
       </Table>
 
-      {/* Model Comparison */}
+      {/* Model-Specific Breakdown (if available) */}
+      {hasModelSpecific && (
+        <Stack gap="xs">
+          <Text size="xs" c="dimmed" tt="uppercase" fw={500}>
+            By Model
+          </Text>
+          <Table withTableBorder>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>{t("dashboard.tokenCost.model")}</Table.Th>
+                <Table.Th style={{ textAlign: "right" }}>Input</Table.Th>
+                <Table.Th style={{ textAlign: "right" }}>Output</Table.Th>
+                <Table.Th style={{ textAlign: "right" }}>
+                  {t("dashboard.tokenCost.cost")}
+                </Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {sonnetInputTokens > 0 || sonnetOutputTokens > 0 ? (
+                <Table.Tr>
+                  <Table.Td>
+                    <Badge size="sm" variant="light" color="cyan">
+                      Sonnet 4.5
+                    </Badge>
+                  </Table.Td>
+                  <Table.Td style={{ textAlign: "right", fontFamily: "monospace" }}>
+                    {formatTokenCount(sonnetInputTokens)}
+                  </Table.Td>
+                  <Table.Td style={{ textAlign: "right", fontFamily: "monospace" }}>
+                    {formatTokenCount(sonnetOutputTokens)}
+                  </Table.Td>
+                  <Table.Td style={{ textAlign: "right", fontFamily: "monospace" }}>
+                    {formatCurrency(sonnetCost.totalCost)}
+                  </Table.Td>
+                </Table.Tr>
+              ) : null}
+              {opusInputTokens > 0 || opusOutputTokens > 0 ? (
+                <Table.Tr>
+                  <Table.Td>
+                    <Badge size="sm" variant="light" color="violet">
+                      Opus 4.5
+                    </Badge>
+                  </Table.Td>
+                  <Table.Td style={{ textAlign: "right", fontFamily: "monospace" }}>
+                    {formatTokenCount(opusInputTokens)}
+                  </Table.Td>
+                  <Table.Td style={{ textAlign: "right", fontFamily: "monospace" }}>
+                    {formatTokenCount(opusOutputTokens)}
+                  </Table.Td>
+                  <Table.Td style={{ textAlign: "right", fontFamily: "monospace" }}>
+                    {formatCurrency(opusCost.totalCost)}
+                  </Table.Td>
+                </Table.Tr>
+              ) : null}
+            </Table.Tbody>
+          </Table>
+        </Stack>
+      )}
+
+      {/* Model Comparison - Always show for reference */}
       {hasData && (
         <Stack gap="xs">
           <Text size="xs" c="dimmed" tt="uppercase" fw={500}>
@@ -209,23 +265,27 @@ export function TokenCostCalculator({
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {Object.entries(MODEL_PRICING).map(([model]) => {
-                const cost = calculateCost(model, inputTotal, outputTotal);
-                return (
-                  <Table.Tr key={model}>
-                    <Table.Td>
-                      <Text size="sm" ff="monospace">
-                        {model}
-                      </Text>
-                    </Table.Td>
-                    <Table.Td style={{ textAlign: "right" }}>
-                      <Text size="sm" ff="monospace">
-                        {formatCurrency(cost.totalCost)}
-                      </Text>
-                    </Table.Td>
-                  </Table.Tr>
-                );
-              })}
+              {Object.entries(MODEL_PRICING)
+                .filter(([model]) => model.includes("4.5")) // Only show 4.5 models
+                .map(([model, pricing]) => {
+                  const cost = calculateCost(model, inputTotal, outputTotal);
+                  return (
+                    <Table.Tr key={model}>
+                      <Table.Td>
+                        <Group gap="xs">
+                          <Badge size="xs" variant="light" color={pricing.color}>
+                            {model.replace("claude-", "").replace("-", " ")}
+                          </Badge>
+                        </Group>
+                      </Table.Td>
+                      <Table.Td style={{ textAlign: "right" }}>
+                        <Text size="sm" ff="monospace">
+                          {formatCurrency(cost.totalCost)}
+                        </Text>
+                      </Table.Td>
+                    </Table.Tr>
+                  );
+                })}
             </Table.Tbody>
           </Table>
         </Stack>
