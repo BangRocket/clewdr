@@ -312,7 +312,7 @@ export function LogsPanel() {
                     wordBreak: "break-all",
                     borderRadius: "var(--mantine-radius-xs)",
                     borderLeft: `3px solid var(--mantine-color-${color}-5)`,
-                    background: `var(--mantine-color-${color}-9)`,
+                    background: "rgba(10, 13, 31, 0.8)",
                     color: `var(--mantine-color-${color}-4)`,
                   }}
                 >

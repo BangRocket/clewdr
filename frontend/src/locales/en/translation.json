@@ -7,7 +7,7 @@
   "sidebar": {
     "dashboard": "Dashboard",
     "cookies": "Cookies",
-    "logs": "Full Logs",
+    "logs": "Logging",
     "config": "Configuration",
     "auth": "Auth Status",
     "version": "ClewdR",

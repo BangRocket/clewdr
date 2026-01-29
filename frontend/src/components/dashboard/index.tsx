@@ -25,7 +25,6 @@ import {
 import { getCookieStatus } from "../../api";
 import QuotaGauge from "./QuotaGauge";
 import QuickActions from "./QuickActions";
-import LogsPanel from "./LogsPanel";
 import OAuthStatus from "./OAuthStatus";
 import TokenCostCalculator from "./TokenCostCalculator";
 
@@ -374,35 +373,39 @@ export function Dashboard() {
         </Box>
       </SimpleGrid>
 
-      {/* Main Content Grid */}
+      {/* Main Content Grid - 3 Column Layout */}
       <Grid gutter="md">
-        {/* Left Column - Details */}
+        {/* Quota Gauges */}
+        <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
+          <Paper p="md" radius="md" className="glass-card" h="100%">
+            <Text size="xs" c="dimmed" tt="uppercase" fw={500} mb="md">
+              {t("dashboard.quotaUsage")}
+            </Text>
+            <QuotaGauge quotas={quotas} isLoading={isLoading} />
+          </Paper>
+        </Grid.Col>
+
+        {/* Token Cost Calculator */}
+        <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
+          <Paper p="md" radius="md" className="glass-card" h="100%">
+            <Text size="xs" c="dimmed" tt="uppercase" fw={500} mb="md">
+              {t("dashboard.tokenCost.title")}
+            </Text>
+            <TokenCostCalculator
+              totalInputTokens={totalInput}
+              totalOutputTokens={totalOutput}
+              sonnetInputTokens={sonnetInput}
+              sonnetOutputTokens={sonnetOutput}
+              opusInputTokens={opusInput}
+              opusOutputTokens={opusOutput}
+              isLoading={isLoading}
+            />
+          </Paper>
+        </Grid.Col>
+
+        {/* OAuth Status & Quick Actions */}
         <Grid.Col span={{ base: 12, lg: 4 }}>
           <Stack gap="md">
-            {/* Quota Gauges */}
-            <Paper p="md" radius="md" className="glass-card">
-              <Text size="xs" c="dimmed" tt="uppercase" fw={500} mb="md">
-                {t("dashboard.quotaUsage")}
-              </Text>
-              <QuotaGauge quotas={quotas} isLoading={isLoading} />
-            </Paper>
-
-            {/* Token Cost Calculator */}
-            <Paper p="md" radius="md" className="glass-card">
-              <Text size="xs" c="dimmed" tt="uppercase" fw={500} mb="md">
-                {t("dashboard.tokenCost.title")}
-              </Text>
-              <TokenCostCalculator
-                totalInputTokens={totalInput}
-                totalOutputTokens={totalOutput}
-                sonnetInputTokens={sonnetInput}
-                sonnetOutputTokens={sonnetOutput}
-                opusInputTokens={opusInput}
-                opusOutputTokens={opusOutput}
-                isLoading={isLoading}
-              />
-            </Paper>
-
             {/* OAuth Status */}
             <Paper p="md" radius="md" className="glass-card">
               <Text size="xs" c="dimmed" tt="uppercase" fw={500} mb="md">
@@ -419,13 +422,6 @@ export function Dashboard() {
               />
             </Paper>
           </Stack>
-        </Grid.Col>
-
-        {/* Right Column - Console Logs */}
-        <Grid.Col span={{ base: 12, lg: 8 }}>
-          <Box h={{ base: 500, lg: "calc(100vh - 380px)" }}>
-            <LogsPanel />
-          </Box>
         </Grid.Col>
       </Grid>
     </Stack>

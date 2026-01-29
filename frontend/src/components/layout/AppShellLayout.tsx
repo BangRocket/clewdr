@@ -126,9 +126,6 @@ export function AppShellLayout({
             </Text>
           </Group>
           <Group gap="xs">
-            <Text size="sm" c="dimmed" visibleFrom="sm">
-              {version}
-            </Text>
             <Tooltip label={t("settings.language")}>
               <ActionIcon
                 variant="subtle"
@@ -208,6 +205,12 @@ export function AppShellLayout({
           style={{ borderTop: "1px solid var(--card-border)" }}
         >
           <Group justify="center" gap="xs">
+            <Text size="sm" c="dimmed">
+              {version}
+            </Text>
+            <Text size="sm" c="dimmed">
+              |
+            </Text>
             <Text size="sm" c="dimmed">
               {t("app.footer", { year: new Date().getFullYear() })}
             </Text>
