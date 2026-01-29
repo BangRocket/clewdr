@@ -16,7 +16,7 @@ codegen-units = 1
 panic = "abort"
 
 [dependencies]
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "process", "io-util"] }
 wreq = { version = "5", features = [
     "cookies",
     "json",

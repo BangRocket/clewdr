@@ -4,6 +4,8 @@ use std::{
     net::{IpAddr, SocketAddr},
 };
 
+use crate::types::mcp::McpServerConfig;
+
 use axum::http::{Uri, uri::Scheme};
 use clap::Parser;
 use colored::Colorize;
@@ -125,6 +127,12 @@ pub struct ClewdrConfig {
     #[serde(default)]
     pub custom_system: Option<String>,
 
+    // MCP settings, can hot reload
+    #[serde(default)]
+    pub mcp_enabled: bool,
+    #[serde(default)]
+    pub mcp_servers: Vec<McpServerConfig>,
+
     // Skip field, can hot reload
     #[serde(skip)]
     pub wreq_proxy: Option<Proxy>,
@@ -160,6 +168,8 @@ impl Default for ClewdrConfig {
             skip_normal_pro: false,
             claude_code_client_id: None,
             custom_system: None,
+            mcp_enabled: false,
+            mcp_servers: Vec::new(),
             no_fs: false,
             log_to_file: false,
         }

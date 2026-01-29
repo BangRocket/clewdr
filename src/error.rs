@@ -158,6 +158,14 @@ pub enum ClewdrError {
     TimestampError { timestamp: i64 },
     #[snafu(display("Key/Password Invalid"))]
     InvalidAuth,
+    #[snafu(display("MCP error: {}", msg))]
+    McpError { msg: String },
+    #[snafu(display("MCP server '{}' not found", name))]
+    McpServerNotFound { name: String },
+    #[snafu(display("MCP tool '{}' not found", name))]
+    McpToolNotFound { name: String },
+    #[snafu(display("MCP tool execution failed: {}", msg))]
+    McpToolExecutionFailed { msg: String },
     #[snafu(whatever, display("{}: {}", message, source.as_ref().map_or_else(|| "Unknown error".into(), |e| e.to_string())))]
     Whatever {
         message: String,
@@ -211,6 +219,12 @@ impl IntoResponse for ClewdrError {
                 (StatusCode::BAD_REQUEST, json!(self.to_string()))
             }
             ClewdrError::EmptyChoices => (StatusCode::NO_CONTENT, json!(self.to_string())),
+            ClewdrError::McpError { .. } => (StatusCode::BAD_GATEWAY, json!(self.to_string())),
+            ClewdrError::McpServerNotFound { .. } => (StatusCode::NOT_FOUND, json!(self.to_string())),
+            ClewdrError::McpToolNotFound { .. } => (StatusCode::NOT_FOUND, json!(self.to_string())),
+            ClewdrError::McpToolExecutionFailed { .. } => {
+                (StatusCode::BAD_GATEWAY, json!(self.to_string()))
+            }
             _ => (StatusCode::INTERNAL_SERVER_ERROR, json!(self.to_string())),
         };
         let err = ClaudeError {

@@ -3,6 +3,7 @@ mod claude_code;
 mod claude_web;
 mod config;
 mod error;
+mod mcp;
 mod misc;
 mod ws_logs;
 pub use browser_cookies::api_get_browser_session_cookie;
@@ -12,6 +13,8 @@ pub use claude_web::api_claude_web;
 /// Configuration related endpoints for retrieving and updating Clewdr settings
 pub use config::{api_get_config, api_post_config};
 pub use error::ApiError;
+/// MCP management endpoints
+pub use mcp::{call_mcp_tool, get_mcp_status, mcp_health, reload_mcp};
 /// Miscellaneous endpoints for authentication, cookies, and version information
 pub use misc::{
     api_auth, api_delete_cookie, api_get_cookies, api_get_logs, api_get_models, api_post_cookie,
