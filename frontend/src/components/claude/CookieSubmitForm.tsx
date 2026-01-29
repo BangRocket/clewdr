@@ -27,7 +27,11 @@ interface CookieResult {
   message: string;
 }
 
-export function CookieSubmitForm() {
+interface CookieSubmitFormProps {
+  onSuccess?: () => void;
+}
+
+export function CookieSubmitForm({ onSuccess }: CookieSubmitFormProps) {
   const { t } = useTranslation();
   const [cookies, setCookies] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -127,6 +131,10 @@ export function CookieSubmitForm() {
         message: t("cookieSubmit.allSuccess", { count: successCount }),
       });
       setCookies("");
+      // Call onSuccess after a brief delay to show the success message
+      if (onSuccess) {
+        setTimeout(onSuccess, 1500);
+      }
     } else if (successCount === 0) {
       setOverallStatus({
         type: "error",

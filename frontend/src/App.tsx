@@ -13,7 +13,7 @@ import {
 import { IconInfoCircle } from "@tabler/icons-react";
 import AppShellLayout from "./components/layout/AppShellLayout";
 import AuthGatekeeper from "./components/auth/AuthGatekeeper";
-import ClaudeTabs from "./components/claude";
+import CookiesPage from "./components/claude";
 import LogsTab from "./components/console";
 import Dashboard from "./components/dashboard";
 import AccountPage from "./components/account";
@@ -53,7 +53,7 @@ function App() {
       case "dashboard":
         return <Dashboard />;
       case "cookies":
-        return <ClaudeTabs />;
+        return <CookiesPage />;
       case "logs":
         return <LogsTab />;
       case "account":

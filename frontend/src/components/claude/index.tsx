@@ -1,35 +1,43 @@
 // frontend/src/components/claude/index.tsx
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Tabs } from "@mantine/core";
-import { IconUpload, IconCookie } from "@tabler/icons-react";
+import { Stack, Button, Modal, Title, Group } from "@mantine/core";
+import { useDisclosure } from "@mantine/hooks";
+import { IconPlus } from "@tabler/icons-react";
 import CookieSubmitForm from "./CookieSubmitForm";
 import CookieVisualization from "./CookieVisualization";
 
-export function ClaudeTabs() {
+export function CookiesPage() {
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<string | null>("submit");
+  const [opened, { open, close }] = useDisclosure(false);
 
   return (
-    <Tabs value={activeTab} onChange={setActiveTab}>
-      <Tabs.List>
-        <Tabs.Tab value="submit" leftSection={<IconUpload size={16} />}>
-          {t("claudeTab.submit")}
-        </Tabs.Tab>
-        <Tabs.Tab value="status" leftSection={<IconCookie size={16} />}>
-          {t("claudeTab.status")}
-        </Tabs.Tab>
-      </Tabs.List>
+    <>
+      <Stack gap="md">
+        <Group justify="flex-end">
+          <Button
+            leftSection={<IconPlus size={16} />}
+            onClick={open}
+            variant="gradient"
+            gradient={{ from: "cyan", to: "violet", deg: 90 }}
+          >
+            {t("claudeTab.submit")}
+          </Button>
+        </Group>
 
-      <Tabs.Panel value="submit" pt="md">
-        <CookieSubmitForm />
-      </Tabs.Panel>
-
-      <Tabs.Panel value="status" pt="md">
         <CookieVisualization />
-      </Tabs.Panel>
-    </Tabs>
+      </Stack>
+
+      <Modal
+        opened={opened}
+        onClose={close}
+        title={<Title order={4}>{t("claudeTab.submit")}</Title>}
+        size="lg"
+        centered
+      >
+        <CookieSubmitForm onSuccess={close} />
+      </Modal>
+    </>
   );
 }
 
-export default ClaudeTabs;
+export default CookiesPage;
