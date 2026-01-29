@@ -13,11 +13,10 @@ import {
 import { IconInfoCircle } from "@tabler/icons-react";
 import AppShellLayout from "./components/layout/AppShellLayout";
 import AuthGatekeeper from "./components/auth/AuthGatekeeper";
-import LogoutPanel from "./components/auth/LogoutPanel";
 import ClaudeTabs from "./components/claude";
-import ConfigTab from "./components/config";
 import LogsTab from "./components/console";
 import Dashboard from "./components/dashboard";
+import AccountPage from "./components/account";
 import { useAppContext } from "./context/AppContext";
 
 function App() {
@@ -55,12 +54,10 @@ function App() {
         return <Dashboard />;
       case "cookies":
         return <ClaudeTabs />;
-      case "config":
-        return <ConfigTab />;
       case "logs":
         return <LogsTab />;
-      case "auth":
-        return <LogoutPanel onLogout={handleLogout} />;
+      case "account":
+        return <AccountPage onLogout={handleLogout} />;
       default:
         return <Dashboard />;
     }

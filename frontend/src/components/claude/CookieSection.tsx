@@ -1,11 +1,12 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
+import { Paper, Group, Text, Badge, Stack, Divider, Box } from "@mantine/core";
 import type { CookieItem } from "../../types/cookie.types";
 
 interface CookieSectionProps {
   title: string;
   cookies: CookieItem[];
-  color: string;
+  color: "green" | "yellow" | "red" | "cyan" | "violet";
   renderStatus: (item: CookieItem, index: number) => React.ReactNode;
 }
 
@@ -17,34 +18,47 @@ const CookieSection: React.FC<CookieSectionProps> = ({
 }) => {
   const { t } = useTranslation();
   // sort cookie base on reset_time
-  cookies.sort((a, b) => {
+  const sortedCookies = [...cookies].sort((a, b) => {
     const aTime = a.reset_time ? new Date(a.reset_time).getTime() : 0;
     const bTime = b.reset_time ? new Date(b.reset_time).getTime() : 0;
     return aTime - bTime;
   });
 
   return (
-    <div className={`rounded-lg bg-gray-800 overflow-hidden w-full shadow-md`}>
-      <div
-        className={`bg-${color}-900 px-4 py-2 flex justify-between items-center border-b border-${color}-700`}
+    <Paper radius="md" className="glass-card" style={{ overflow: "hidden" }}>
+      <Box
+        p="sm"
+        style={{
+          borderBottom: `1px solid var(--mantine-color-${color}-9)`,
+          background: `var(--mantine-color-${color}-9)`,
+        }}
       >
-        <h4 className={`font-medium text-${color}-100`}>{title}</h4>
-        <span
-          className={`bg-${color}-800 text-${color}-100 text-xs px-2 py-1 rounded-full`}
-        >
-          {cookies.length}
-        </span>
-      </div>
-      {cookies.length > 0 ? (
-        <div className="p-4 divide-y divide-gray-700">
-          {cookies.map((item, index) => renderStatus(item, index))}
-        </div>
+        <Group justify="space-between">
+          <Text fw={500} c={`${color}.2`}>
+            {title}
+          </Text>
+          <Badge color={color} variant="filled" size="sm">
+            {cookies.length}
+          </Badge>
+        </Group>
+      </Box>
+      {sortedCookies.length > 0 ? (
+        <Stack gap={0} p="md">
+          {sortedCookies.map((item, index) => (
+            <React.Fragment key={index}>
+              {index > 0 && <Divider my="xs" color="dark.5" />}
+              {renderStatus(item, index)}
+            </React.Fragment>
+          ))}
+        </Stack>
       ) : (
-        <div className="p-4 text-sm text-gray-400 italic">
-          {t("cookieStatus.noCookies", { type: title.toLowerCase() })}
-        </div>
+        <Box p="md">
+          <Text size="sm" c="dimmed" fs="italic">
+            {t("cookieStatus.noCookies", { type: title.toLowerCase() })}
+          </Text>
+        </Box>
       )}
-    </div>
+    </Paper>
   );
 };
 

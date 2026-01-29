@@ -1,11 +1,22 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import {
+  Stack,
+  Group,
+  Text,
+  Button,
+  Alert,
+  Loader,
+  Center,
+  Badge,
+  Box,
+  Title,
+  Tooltip,
+} from "@mantine/core";
+import { IconRefresh, IconX } from "@tabler/icons-react";
 import { getCookieStatus, deleteCookie } from "../../api";
 import { formatTimestamp, formatIsoTimestamp } from "../../utils/formatters";
 import { CookieStatusInfo, CookieItem } from "../../types/cookie.types";
-import Button from "../common/Button";
-import LoadingSpinner from "../common/LoadingSpinner";
-import StatusMessage from "../common/StatusMessage";
 import CookieSection from "./CookieSection";
 import CookieValue from "./CookieValue";
 import DeleteButton from "./DeleteButton";
@@ -47,7 +58,6 @@ const CookieVisualization: React.FC = () => {
           : [],
       };
       setCookieStatus(safeData);
-      // Cache info is available in response.cacheInfo for debugging
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setError(message);
@@ -112,17 +122,14 @@ const CookieVisualization: React.FC = () => {
 
     const groups: Array<{
       title: string;
-      b: Required<
-        Pick<
-          typeof s,
-          | "total_input_tokens"
-          | "total_output_tokens"
-          | "sonnet_input_tokens"
-          | "sonnet_output_tokens"
-          | "opus_input_tokens"
-          | "opus_output_tokens"
-        >
-      >;
+      b: {
+        total_input_tokens: number;
+        total_output_tokens: number;
+        sonnet_input_tokens: number;
+        sonnet_output_tokens: number;
+        opus_input_tokens: number;
+        opus_output_tokens: number;
+      };
       showSonnet: boolean;
       showOpus: boolean;
     }> = [];
@@ -180,7 +187,6 @@ const CookieVisualization: React.FC = () => {
       groups.push({
         title: t("cookieStatus.quota.sevenDayOpus") as string,
         b: woReq,
-        // weekly_opus bucket only counts Opus; still guard by > 0
         showSonnet:
           woReq.sonnet_input_tokens > 0 || woReq.sonnet_output_tokens > 0,
         showOpus: woReq.opus_input_tokens > 0 || woReq.opus_output_tokens > 0,
@@ -198,52 +204,41 @@ const CookieVisualization: React.FC = () => {
 
     if (groups.length === 0) return null;
 
-    const Row = ({ label, value }: { label: string; value: number }) => (
-      <span>
-        {label}: {value}
-      </span>
-    );
-
     return (
-      <div className="grid gap-2 text-xs text-gray-400">
+      <Stack gap="xs" mt="xs">
         {groups.map(({ title, b, showSonnet, showOpus }, idx) => (
-          <div key={idx} className="flex flex-col gap-1">
-            <div className="flex gap-3 flex-wrap">
-              <span>
-                {title} · {t("cookieStatus.usage.totalInput")}:{" "}
-                {b.total_input_tokens}
-              </span>
-              <span>
+          <Box key={idx}>
+            <Group gap="md" wrap="wrap">
+              <Text size="xs" c="dimmed">
+                {title} · {t("cookieStatus.usage.totalInput")}: {b.total_input_tokens}
+              </Text>
+              <Text size="xs" c="dimmed">
                 {t("cookieStatus.usage.totalOutput")}: {b.total_output_tokens}
-              </span>
-            </div>
+              </Text>
+            </Group>
             {showSonnet && (
-              <div className="flex gap-3 flex-wrap pl-1 text-gray-500">
-                <Row
-                  label={t("cookieStatus.usage.sonnetInput") as string}
-                  value={b.sonnet_input_tokens}
-                />
-                <Row
-                  label={t("cookieStatus.usage.sonnetOutput") as string}
-                  value={b.sonnet_output_tokens}
-                />
-              </div>
+              <Group gap="md" wrap="wrap" ml="sm">
+                <Text size="xs" c="dimmed">
+                  {t("cookieStatus.usage.sonnetInput")}: {b.sonnet_input_tokens}
+                </Text>
+                <Text size="xs" c="dimmed">
+                  {t("cookieStatus.usage.sonnetOutput")}: {b.sonnet_output_tokens}
+                </Text>
+              </Group>
             )}
             {showOpus && (
-              <div className="flex gap-3 flex-wrap pl-1 text-gray-500">
-                <Row
-                  label={t("cookieStatus.usage.opusInput") as string}
-                  value={b.opus_input_tokens}
-                />
-                <Row
-                  label={t("cookieStatus.usage.opusOutput") as string}
-                  value={b.opus_output_tokens}
-                />
-              </div>
+              <Group gap="md" wrap="wrap" ml="sm">
+                <Text size="xs" c="dimmed">
+                  {t("cookieStatus.usage.opusInput")}: {b.opus_input_tokens}
+                </Text>
+                <Text size="xs" c="dimmed">
+                  {t("cookieStatus.usage.opusOutput")}: {b.opus_output_tokens}
+                </Text>
+              </Group>
             )}
-          </div>
+          </Box>
         ))}
-      </div>
+      </Stack>
     );
   };
 
@@ -258,57 +253,58 @@ const CookieVisualization: React.FC = () => {
       typeof opus === "number" ||
       typeof sevenSonnet === "number";
     if (!hasAny) return null;
+
     return (
-      <div className="grid gap-1 text-xs text-gray-400">
+      <Stack gap={4} mt="xs">
         {typeof sess === "number" && (
-          <div>
+          <Text size="xs" c="dimmed">
             {t("cookieStatus.quota.session")}: {sess}%
             {status.session_resets_at && (
-              <span className="ml-1 text-gray-500">
+              <Text span c="dimmed" ml="xs">
                 {t("cookieStatus.quota.resetsAt", {
                   time: formatIsoTimestamp(status.session_resets_at),
                 })}
-              </span>
+              </Text>
             )}
-          </div>
+          </Text>
         )}
         {typeof seven === "number" && (
-          <div>
+          <Text size="xs" c="dimmed">
             {t("cookieStatus.quota.sevenDay")}: {seven}%
             {status.seven_day_resets_at && (
-              <span className="ml-1 text-gray-500">
+              <Text span c="dimmed" ml="xs">
                 {t("cookieStatus.quota.resetsAt", {
                   time: formatIsoTimestamp(status.seven_day_resets_at),
                 })}
-              </span>
+              </Text>
             )}
-          </div>
+          </Text>
         )}
         {typeof sevenSonnet === "number" && (
-          <div>
+          <Text size="xs" c="dimmed">
             {t("cookieStatus.quota.sevenDaySonnet")}: {sevenSonnet}%
             {status.seven_day_sonnet_resets_at && (
-              <span className="ml-1 text-gray-500">
+              <Text span c="dimmed" ml="xs">
                 {t("cookieStatus.quota.resetsAt", {
                   time: formatIsoTimestamp(status.seven_day_sonnet_resets_at),
                 })}
-              </span>
+              </Text>
             )}
-          </div>
+          </Text>
         )}
         {typeof opus === "number" && (
-          <div>
+          <Text size="xs" c="dimmed">
             {t("cookieStatus.quota.sevenDayOpus")}: {opus}%
             {status.seven_day_opus_resets_at && (
-              <span className="ml-1 text-gray-500">
+              <Text span c="dimmed" ml="xs">
                 {t("cookieStatus.quota.resetsAt", {
                   time: formatIsoTimestamp(status.seven_day_opus_resets_at),
                 })}
-              </span>
+              </Text>
             )}
-          </div>
+          </Text>
         )}
-      </div>
+      </Stack>
     );
   };
 
@@ -382,124 +378,73 @@ const CookieVisualization: React.FC = () => {
       return null;
     }
 
-    const { label, classes } = (() => {
-      if (flag === true) {
-        return {
-          label: t("cookieStatus.context.enabled"),
-          classes:
-            "bg-emerald-500/20 text-emerald-200 border border-emerald-400/60",
-        };
-      }
-      if (flag === false) {
-        return {
-          label: t("cookieStatus.context.disabled"),
-          classes: "bg-red-500/20 text-red-200 border border-red-500/60",
-        };
-      }
-      return {
-        label: t("cookieStatus.context.unknown"),
-        classes: "bg-gray-700 text-gray-300 border border-gray-600/80",
-      };
-    })();
-
+    if (flag === true) {
+      return (
+        <Badge color="green" variant="light" size="xs">
+          {t("cookieStatus.context.enabled")}
+        </Badge>
+      );
+    }
+    if (flag === false) {
+      return (
+        <Badge color="red" variant="light" size="xs">
+          {t("cookieStatus.context.disabled")}
+        </Badge>
+      );
+    }
     return (
-      <span
-        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${classes}`}
-      >
-        {label}
-      </span>
+      <Badge color="gray" variant="light" size="xs">
+        {t("cookieStatus.context.unknown")}
+      </Badge>
     );
   };
 
   return (
-    <div className="space-y-6 w-full">
+    <Stack gap="md">
       {/* Header */}
-      <div className="flex justify-between items-center mb-4 w-full">
-        <div>
-          <h3 className="text-lg font-semibold text-white">
-            {t("cookieStatus.title")}
-          </h3>
-          <p className="text-xs text-gray-400 mt-1">
+      <Group justify="space-between" align="flex-start">
+        <Box>
+          <Title order={4}>{t("cookieStatus.title")}</Title>
+          <Text size="xs" c="dimmed" mt={4}>
             {t("cookieStatus.total", { count: totalCookies })}
-          </p>
-        </div>
-        <div className="relative group">
+          </Text>
+        </Box>
+        <Tooltip label={t("cookieStatus.refreshTooltip")}>
           <Button
             onClick={handleRefresh}
-            className={`p-2 rounded-md transition-colors text-sm ${
-              isForceRefreshing
-                ? "bg-orange-600 hover:bg-orange-500"
-                : "bg-gray-700 hover:bg-gray-600"
-            }`}
+            variant={isForceRefreshing ? "filled" : "light"}
+            color={isForceRefreshing ? "orange" : "gray"}
+            size="sm"
+            leftSection={
+              loading ? <Loader size={14} /> : <IconRefresh size={16} />
+            }
             disabled={loading}
-            variant="secondary"
           >
-            {loading ? (
-              <span className="flex items-center">
-                <svg
-                  className="animate-spin h-4 w-4 mr-2"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-                {isForceRefreshing
-                  ? t("cookieStatus.forceRefreshing")
-                  : t("cookieStatus.refreshing")}
-              </span>
-            ) : (
-              <span className="flex items-center">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-4 w-4 mr-2"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                  />
-                </svg>
-                {t("cookieStatus.refresh")}
-              </span>
-            )}
+            {loading
+              ? isForceRefreshing
+                ? t("cookieStatus.forceRefreshing")
+                : t("cookieStatus.refreshing")
+              : t("cookieStatus.refresh")}
           </Button>
-          {/* Tooltip */}
-          <div className="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity absolute right-0 top-full mt-2 w-auto whitespace-nowrap bg-gray-800 text-white text-xs rounded-lg p-2 z-10 shadow-lg">
-            <div className="text-gray-200">
-              {t("cookieStatus.refreshTooltip")}
-            </div>
-          </div>
-        </div>
-      </div>
+        </Tooltip>
+      </Group>
 
       {/* Error Display */}
-      {error && <StatusMessage type="error" message={error} />}
+      {error && (
+        <Alert color="red" icon={<IconX size={16} />} withCloseButton onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
 
       {/* Loading State */}
       {loading && totalCookies === 0 && (
-        <div className="flex justify-center py-8">
-          <LoadingSpinner size="lg" color="text-cyan-500" />
-        </div>
+        <Center py="xl">
+          <Loader size="lg" />
+        </Center>
       )}
 
       {/* Cookie Sections */}
-      <div className="space-y-6 w-full">
+      <Stack gap="md">
         {/* Valid Cookies */}
         <CookieSection
           title={t("cookieStatus.sections.valid")}
@@ -511,40 +456,37 @@ const CookieVisualization: React.FC = () => {
             const quotaStats = renderQuotaStats(status);
             const hasMeta = contextBadge || usageStats || quotaStats;
             return (
-              <div
-                key={index}
-                className="py-2 text-sm text-gray-300 flex flex-wrap justify-between items-start"
-              >
-                <div className="text-green-300 flex-grow mr-4 min-w-0 mb-1 sm:mb-0">
-                  <CookieValue cookie={status.cookie} />
-                  {hasMeta && (
-                    <details className="mt-1 text-xs text-gray-400">
-                      <summary className="cursor-pointer text-gray-500 hover:text-gray-300">
-                        {t("cookieStatus.meta.summary")}
-                      </summary>
-                      <div className="mt-2 space-y-2">
-                        {contextBadge && (
-                          <div className="flex items-center gap-2 text-gray-300">
-                            {contextBadge}
-                          </div>
-                        )}
-                        {usageStats}
-                        {quotaStats}
-                      </div>
-                    </details>
-                  )}
-                </div>
-                <div className="flex items-center">
-                  <span className="text-gray-400">
-                    {t("cookieStatus.status.available")}
-                  </span>
-                  <DeleteButton
-                    cookie={status.cookie}
-                    onDelete={handleDeleteCookie}
-                    isDeleting={deletingCookie === status.cookie}
-                  />
-                </div>
-              </div>
+              <Box key={index} py="xs">
+                <Group justify="space-between" align="flex-start" wrap="nowrap">
+                  <Box style={{ flex: 1, minWidth: 0 }}>
+                    <Text c="green.4" component="div">
+                      <CookieValue cookie={status.cookie} />
+                    </Text>
+                    {hasMeta && (
+                      <details style={{ marginTop: 4 }}>
+                        <summary style={{ cursor: "pointer", fontSize: "var(--mantine-font-size-xs)", color: "var(--mantine-color-dimmed)" }}>
+                          {t("cookieStatus.meta.summary")}
+                        </summary>
+                        <Stack gap="xs" mt="xs">
+                          {contextBadge && <Box>{contextBadge}</Box>}
+                          {usageStats}
+                          {quotaStats}
+                        </Stack>
+                      </details>
+                    )}
+                  </Box>
+                  <Group gap="xs" wrap="nowrap">
+                    <Text size="sm" c="dimmed">
+                      {t("cookieStatus.status.available")}
+                    </Text>
+                    <DeleteButton
+                      cookie={status.cookie}
+                      onDelete={handleDeleteCookie}
+                      isDeleting={deletingCookie === status.cookie}
+                    />
+                  </Group>
+                </Group>
+              </Box>
             );
           }}
         />
@@ -560,45 +502,42 @@ const CookieVisualization: React.FC = () => {
             const quotaStats = renderQuotaStats(status);
             const hasMeta = contextBadge || usageStats || quotaStats;
             return (
-              <div
-                key={index}
-                className="py-2 flex flex-wrap justify-between text-sm items-start"
-              >
-                <div className="text-yellow-300 flex-grow mr-4 min-w-0 mb-1 sm:mb-0">
-                  <CookieValue cookie={status.cookie} />
-                  {hasMeta && (
-                    <details className="mt-1 text-xs text-gray-400">
-                      <summary className="cursor-pointer text-gray-500 hover:text-gray-300">
-                        {t("cookieStatus.meta.summary")}
-                      </summary>
-                      <div className="mt-2 space-y-2">
-                        {contextBadge && (
-                          <div className="flex items-center gap-2 text-gray-300">
-                            {contextBadge}
-                          </div>
-                        )}
-                        {usageStats}
-                        {quotaStats}
-                      </div>
-                    </details>
-                  )}
-                </div>
-                <div className="flex items-center">
-                  <span className="text-gray-400">
-                    {(() => {
-                      const cooldown = getCooldownDisplay(status);
-                      if (!cooldown)
-                        return t("cookieStatus.status.unknownReset");
-                      return `${cooldown.label}: ${cooldown.time}`;
-                    })()}
-                  </span>
-                  <DeleteButton
-                    cookie={status.cookie}
-                    onDelete={handleDeleteCookie}
-                    isDeleting={deletingCookie === status.cookie}
-                  />
-                </div>
-              </div>
+              <Box key={index} py="xs">
+                <Group justify="space-between" align="flex-start" wrap="nowrap">
+                  <Box style={{ flex: 1, minWidth: 0 }}>
+                    <Text c="yellow.4" component="div">
+                      <CookieValue cookie={status.cookie} />
+                    </Text>
+                    {hasMeta && (
+                      <details style={{ marginTop: 4 }}>
+                        <summary style={{ cursor: "pointer", fontSize: "var(--mantine-font-size-xs)", color: "var(--mantine-color-dimmed)" }}>
+                          {t("cookieStatus.meta.summary")}
+                        </summary>
+                        <Stack gap="xs" mt="xs">
+                          {contextBadge && <Box>{contextBadge}</Box>}
+                          {usageStats}
+                          {quotaStats}
+                        </Stack>
+                      </details>
+                    )}
+                  </Box>
+                  <Group gap="xs" wrap="nowrap">
+                    <Text size="sm" c="dimmed">
+                      {(() => {
+                        const cooldown = getCooldownDisplay(status);
+                        if (!cooldown)
+                          return t("cookieStatus.status.unknownReset");
+                        return `${cooldown.label}: ${cooldown.time}`;
+                      })()}
+                    </Text>
+                    <DeleteButton
+                      cookie={status.cookie}
+                      onDelete={handleDeleteCookie}
+                      isDeleting={deletingCookie === status.cookie}
+                    />
+                  </Group>
+                </Group>
+              </Box>
             );
           }}
         />
@@ -610,30 +549,31 @@ const CookieVisualization: React.FC = () => {
           color="red"
           renderStatus={(status, index) => {
             return (
-              <div
-                key={index}
-                className="py-2 flex flex-wrap justify-between text-sm items-start"
-              >
-                <div className="text-red-300 flex-grow mr-4 min-w-0 mb-1 sm:mb-0">
-                  <CookieValue cookie={status.cookie} />
-                  {renderUsageStats(status)}
-                </div>
-                <div className="flex items-center">
-                  <span className="text-gray-400">
-                    {getReasonText(status.reason)}
-                  </span>
-                  <DeleteButton
-                    cookie={status.cookie}
-                    onDelete={handleDeleteCookie}
-                    isDeleting={deletingCookie === status.cookie}
-                  />
-                </div>
-              </div>
+              <Box key={index} py="xs">
+                <Group justify="space-between" align="flex-start" wrap="nowrap">
+                  <Box style={{ flex: 1, minWidth: 0 }}>
+                    <Text c="red.4" component="div">
+                      <CookieValue cookie={status.cookie} />
+                    </Text>
+                    {renderUsageStats(status)}
+                  </Box>
+                  <Group gap="xs" wrap="nowrap">
+                    <Text size="sm" c="dimmed">
+                      {getReasonText(status.reason)}
+                    </Text>
+                    <DeleteButton
+                      cookie={status.cookie}
+                      onDelete={handleDeleteCookie}
+                      isDeleting={deletingCookie === status.cookie}
+                    />
+                  </Group>
+                </Group>
+              </Box>
             );
           }}
         />
-      </div>
-    </div>
+      </Stack>
+    </Stack>
   );
 };
 

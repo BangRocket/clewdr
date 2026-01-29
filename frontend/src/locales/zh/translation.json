@@ -10,6 +10,7 @@
     "logs": "日志",
     "config": "配置",
     "auth": "认证状态",
+    "account": "账户",
     "version": "ClewdR",
     "sections": {
       "overview": "概览",

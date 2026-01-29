@@ -1,9 +1,11 @@
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Group, Code, ActionIcon, Tooltip, UnstyledButton, Box } from "@mantine/core";
+import { IconChevronUp, IconChevronDown, IconCopy } from "@tabler/icons-react";
+import { notifications } from "@mantine/notifications";
 
 interface CookieValueProps {
   cookie: string;
-  // Removed the unused cookieId prop
 }
 
 const CookieValue: React.FC<CookieValueProps> = ({ cookie }) => {
@@ -22,63 +24,56 @@ const CookieValue: React.FC<CookieValueProps> = ({ cookie }) => {
     event.stopPropagation();
     navigator.clipboard
       .writeText(text)
-      .then(() => console.log("Copied to clipboard"))
+      .then(() => {
+        notifications.show({
+          message: t("common.copy"),
+          color: "green",
+        });
+      })
       .catch((err) => console.error("Failed to copy: ", err));
   };
 
   return (
-    <div className="flex flex-wrap items-center">
-      <div
-        className="flex items-center cursor-pointer flex-1 mr-2 min-w-0"
+    <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
+      <UnstyledButton
         onClick={() => setIsExpanded(!isExpanded)}
+        style={{ flex: 1, minWidth: 0 }}
       >
-        <code
-          className={`font-mono ${
-            isExpanded ? "break-all" : "truncate"
-          } w-full`}
+        <Group gap="xs" wrap="nowrap">
+          <Code
+            style={{
+              wordBreak: isExpanded ? "break-all" : undefined,
+              overflow: isExpanded ? "visible" : "hidden",
+              textOverflow: isExpanded ? undefined : "ellipsis",
+              whiteSpace: isExpanded ? "normal" : "nowrap",
+              background: "transparent",
+              padding: 0,
+            }}
+          >
+            {displayText}
+          </Code>
+          {cleanCookie.length > 30 && (
+            <Box c="dimmed" style={{ flexShrink: 0 }}>
+              {isExpanded ? (
+                <IconChevronUp size={14} />
+              ) : (
+                <IconChevronDown size={14} />
+              )}
+            </Box>
+          )}
+        </Group>
+      </UnstyledButton>
+      <Tooltip label={t("cookieStatus.copy")}>
+        <ActionIcon
+          variant="subtle"
+          color="gray"
+          size="sm"
+          onClick={(e) => copyToClipboard(cleanCookie, e)}
         >
-          {displayText}
-        </code>
-        {cleanCookie.length > 30 && (
-          <span className="ml-2 text-gray-500 flex-shrink-0">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d={isExpanded ? "M5 15l7-7 7 7" : "M19 9l-7 7-7-7"}
-              />
-            </svg>
-          </span>
-        )}
-      </div>
-      <button
-        onClick={(e) => copyToClipboard(cleanCookie, e)}
-        className="p-1 bg-gray-700 hover:bg-gray-600 rounded text-xs text-gray-300 focus:outline-none flex-shrink-0"
-        title={t("cookieStatus.copy")}
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          className="h-3 w-3"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"
-          />
-        </svg>
-      </button>
-    </div>
+          <IconCopy size={14} />
+        </ActionIcon>
+      </Tooltip>
+    </Group>
   );
 };
 

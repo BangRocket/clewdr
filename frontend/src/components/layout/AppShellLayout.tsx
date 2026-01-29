@@ -20,7 +20,6 @@ import {
   IconCookie,
   IconTerminal2,
   IconSettings,
-  IconKey,
   IconSun,
   IconMoon,
   IconLanguage,
@@ -62,7 +61,6 @@ const navSections: NavSection[] = [
     icon: IconDatabase,
     items: [
       { id: "cookies", labelKey: "sidebar.cookies", icon: IconCookie },
-      { id: "config", labelKey: "sidebar.config", icon: IconSettings },
     ],
   },
   {
@@ -76,7 +74,7 @@ const navSections: NavSection[] = [
     titleKey: "sidebar.sections.account",
     icon: IconUser,
     items: [
-      { id: "auth", labelKey: "sidebar.auth", icon: IconKey },
+      { id: "account", labelKey: "sidebar.account", icon: IconSettings },
     ],
   },
 ];

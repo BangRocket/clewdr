@@ -10,6 +10,7 @@
     "logs": "Logging",
     "config": "Configuration",
     "auth": "Auth Status",
+    "account": "Account",
     "version": "ClewdR",
     "sections": {
       "overview": "Overview",
