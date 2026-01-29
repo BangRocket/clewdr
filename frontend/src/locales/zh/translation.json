@@ -36,7 +36,25 @@
       "expiresIn": "{{hours}}小时{{minutes}}分钟后过期",
       "expiresMinutes": "{{minutes}}分钟后过期",
       "andMore": "还有 {{count}} 个"
+    },
+    "tokenCost": {
+      "title": "Token 用量与成本",
+      "estimatedCost": "估算成本",
+      "basedOnSonnet": "基于 Claude 3.5 Sonnet 定价",
+      "type": "类型",
+      "tokens": "Token数",
+      "cost": "成本",
+      "total": "总计",
+      "modelComparison": "按模型计算成本",
+      "model": "模型"
     }
+  },
+  "theme": {
+    "light": "浅色模式",
+    "dark": "深色模式"
+  },
+  "settings": {
+    "language": "语言"
   },
   "auth": {
     "title": "需要认证",

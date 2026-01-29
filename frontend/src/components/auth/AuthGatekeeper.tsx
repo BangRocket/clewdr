@@ -1,16 +1,63 @@
 // frontend/src/components/auth/AuthGatekeeper.tsx
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import Button from "../common/Button";
-import FormInput from "../common/FormInput";
-import StatusMessage from "../common/StatusMessage";
+import {
+  TextInput,
+  Button,
+  Stack,
+  Alert,
+  Text,
+  Group,
+  ActionIcon,
+} from "@mantine/core";
+import {
+  IconEye,
+  IconEyeOff,
+  IconAlertCircle,
+  IconCheck,
+  IconInfoCircle,
+  IconX,
+} from "@tabler/icons-react";
 import { useAuth } from "../../hooks/useAuth";
 
 interface AuthGatekeeperProps {
   onAuthenticated?: (status: boolean) => void;
 }
 
-const AuthGatekeeper: React.FC<AuthGatekeeperProps> = ({ onAuthenticated }) => {
+type MessageType = "success" | "error" | "warning" | "info";
+
+interface StatusMessage {
+  type: MessageType;
+  message: string;
+}
+
+const getAlertColor = (type: MessageType) => {
+  switch (type) {
+    case "success":
+      return "green";
+    case "error":
+      return "red";
+    case "warning":
+      return "yellow";
+    default:
+      return "blue";
+  }
+};
+
+const getAlertIcon = (type: MessageType) => {
+  switch (type) {
+    case "success":
+      return <IconCheck size={16} />;
+    case "error":
+      return <IconAlertCircle size={16} />;
+    case "warning":
+      return <IconAlertCircle size={16} />;
+    default:
+      return <IconInfoCircle size={16} />;
+  }
+};
+
+export function AuthGatekeeper({ onAuthenticated }: AuthGatekeeperProps) {
   const { t } = useTranslation();
   const {
     authToken,
@@ -22,12 +69,12 @@ const AuthGatekeeper: React.FC<AuthGatekeeperProps> = ({ onAuthenticated }) => {
     logout,
   } = useAuth(onAuthenticated);
 
-  const [statusMessage, setStatusMessage] = useState({
-    type: "info" as "success" | "error" | "warning" | "info",
+  const [showPassword, setShowPassword] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<StatusMessage>({
+    type: "info",
     message: "",
   });
 
-  // Update status message when error changes
   useEffect(() => {
     if (error) {
       setStatusMessage({
@@ -36,15 +83,6 @@ const AuthGatekeeper: React.FC<AuthGatekeeperProps> = ({ onAuthenticated }) => {
       });
     }
   }, [error]);
-
-  // Show persistent success message after login
-  // (we don't clear it automatically)
-  const handleLoginSuccess = () => {
-    setStatusMessage({
-      type: "success",
-      message: t("auth.success"),
-    });
-  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -60,10 +98,12 @@ const AuthGatekeeper: React.FC<AuthGatekeeperProps> = ({ onAuthenticated }) => {
 
     try {
       await login(authToken);
-      handleLoginSuccess();
+      setStatusMessage({
+        type: "success",
+        message: t("auth.success"),
+      });
     } catch {
-      // Error is already handled in the useAuth hook
-      // and will be displayed via the useEffect
+      // Error handled in useAuth hook
     }
   };
 
@@ -76,56 +116,63 @@ const AuthGatekeeper: React.FC<AuthGatekeeperProps> = ({ onAuthenticated }) => {
   };
 
   return (
-    <div>
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <FormInput
-          id="authToken"
-          name="authToken"
-          type="password"
-          value={authToken}
-          onChange={(e) => setAuthToken(e.target.value)}
+    <form onSubmit={handleSubmit}>
+      <Stack gap="md">
+        <TextInput
           label={t("auth.token")}
           placeholder={t("auth.tokenPlaceholder")}
+          type={showPassword ? "text" : "password"}
+          value={authToken}
+          onChange={(e) => setAuthToken(e.target.value)}
           disabled={isLoading}
-          onClear={() => setAuthToken("")}
+          rightSection={
+            <ActionIcon
+              variant="subtle"
+              onClick={() => setShowPassword(!showPassword)}
+              tabIndex={-1}
+            >
+              {showPassword ? <IconEyeOff size={18} /> : <IconEye size={18} />}
+            </ActionIcon>
+          }
         />
 
         {savedToken && (
-          <div className="flex items-center justify-between mt-2">
-            <p className="text-xs text-gray-400">
+          <Group justify="space-between">
+            <Text size="xs" c="dimmed">
               {t("auth.previousToken")}{" "}
-              <span className="font-mono">{savedToken}</span>
-            </p>
-            <button
-              type="button"
+              <Text component="span" ff="monospace" inherit>
+                {savedToken}
+              </Text>
+            </Text>
+            <Button
+              variant="subtle"
+              color="red"
+              size="compact-xs"
               onClick={handleClearToken}
-              className="text-xs text-red-400 hover:text-red-300"
               disabled={isLoading}
+              leftSection={<IconX size={14} />}
             >
               {t("auth.clear")}
-            </button>
-          </div>
+            </Button>
+          </Group>
         )}
 
         {statusMessage.message && (
-          <StatusMessage
-            type={statusMessage.type}
-            message={statusMessage.message}
-          />
+          <Alert
+            color={getAlertColor(statusMessage.type)}
+            icon={getAlertIcon(statusMessage.type)}
+            variant="light"
+          >
+            {statusMessage.message}
+          </Alert>
         )}
 
-        <Button
-          type="submit"
-          isLoading={isLoading}
-          disabled={isLoading}
-          className="w-full"
-          variant="primary"
-        >
+        <Button type="submit" loading={isLoading} fullWidth>
           {isLoading ? t("auth.verifying") : t("auth.submitButton")}
         </Button>
-      </form>
-    </div>
+      </Stack>
+    </form>
   );
-};
+}
 
 export default AuthGatekeeper;

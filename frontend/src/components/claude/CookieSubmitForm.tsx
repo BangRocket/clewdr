@@ -1,10 +1,25 @@
-import React, { useState } from "react";
+// frontend/src/components/claude/CookieSubmitForm.tsx
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import {
+  Textarea,
+  Button,
+  Alert,
+  Stack,
+  Text,
+  Group,
+  Paper,
+  ScrollArea,
+  ThemeIcon,
+} from "@mantine/core";
+import {
+  IconWorld,
+  IconCheck,
+  IconX,
+  IconAlertCircle,
+  IconInfoCircle,
+} from "@tabler/icons-react";
 import { postCookie, getBrowserCookie } from "../../api";
-import Button from "../common/Button";
-import FormInput from "../common/FormInput";
-import StatusMessage from "../common/StatusMessage";
-import LoadingSpinner from "../common/LoadingSpinner";
 
 interface CookieResult {
   cookie: string;
@@ -12,16 +27,16 @@ interface CookieResult {
   message: string;
 }
 
-const CookieSubmitForm: React.FC = () => {
+export function CookieSubmitForm() {
   const { t } = useTranslation();
   const [cookies, setCookies] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [results, setResults] = useState<CookieResult[]>([]);
-  const [overallStatus, setOverallStatus] = useState({
-    type: "info" as "info" | "success" | "error" | "warning",
-    message: "",
-  });
+  const [overallStatus, setOverallStatus] = useState<{
+    type: "info" | "success" | "error" | "warning";
+    message: string;
+  }>({ type: "info", message: "" });
 
   const handleImportFromBrowser = async () => {
     setIsImporting(true);
@@ -40,13 +55,11 @@ const CookieSubmitForm: React.FC = () => {
           }),
         });
       } else {
-        const errorMsgs = response.errors?.length > 0
-          ? response.errors.join("; ")
-          : response.message || t("cookieSubmit.browserImport.notFound");
-        setOverallStatus({
-          type: "warning",
-          message: errorMsgs,
-        });
+        const errorMsgs =
+          response.errors?.length > 0
+            ? response.errors.join("; ")
+            : response.message || t("cookieSubmit.browserImport.notFound");
+        setOverallStatus({ type: "warning", message: errorMsgs });
       }
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : "Unknown error";
@@ -68,10 +81,7 @@ const CookieSubmitForm: React.FC = () => {
       .filter((line) => line.length > 0);
 
     if (cookieLines.length === 0) {
-      setOverallStatus({
-        type: "error",
-        message: t("cookieSubmit.error.empty"),
-      });
+      setOverallStatus({ type: "error", message: t("cookieSubmit.error.empty") });
       return;
     }
 
@@ -83,7 +93,6 @@ const CookieSubmitForm: React.FC = () => {
     let successCount = 0;
     let errorCount = 0;
 
-    // Process each cookie line
     for (const cookieStr of cookieLines) {
       try {
         await postCookie(cookieStr);
@@ -94,7 +103,6 @@ const CookieSubmitForm: React.FC = () => {
         });
         successCount++;
       } catch (e) {
-        // Handle error for this specific cookie
         const errorMessage = e instanceof Error ? e.message : "Unknown error";
         let translatedError = errorMessage;
 
@@ -106,27 +114,19 @@ const CookieSubmitForm: React.FC = () => {
           translatedError = t("cookieSubmit.error.server");
         }
 
-        newResults.push({
-          cookie: cookieStr,
-          status: "error",
-          message: translatedError,
-        });
+        newResults.push({ cookie: cookieStr, status: "error", message: translatedError });
         errorCount++;
       }
     }
 
     setResults(newResults);
 
-    // Set overall status message
     if (errorCount === 0) {
       setOverallStatus({
         type: "success",
         message: t("cookieSubmit.allSuccess", { count: successCount }),
       });
-      // Don't clear the input field if there were any errors
-      if (errorCount === 0) {
-        setCookies("");
-      }
+      setCookies("");
     } else if (successCount === 0) {
       setOverallStatus({
         type: "error",
@@ -146,112 +146,136 @@ const CookieSubmitForm: React.FC = () => {
     setIsSubmitting(false);
   };
 
+  const getAlertColor = (type: string) => {
+    switch (type) {
+      case "success":
+        return "green";
+      case "error":
+        return "red";
+      case "warning":
+        return "yellow";
+      default:
+        return "blue";
+    }
+  };
+
+  const getAlertIcon = (type: string) => {
+    switch (type) {
+      case "success":
+        return <IconCheck size={16} />;
+      case "error":
+        return <IconX size={16} />;
+      case "warning":
+        return <IconAlertCircle size={16} />;
+      default:
+        return <IconInfoCircle size={16} />;
+    }
+  };
+
   return (
-    <div>
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <FormInput
-          id="cookie"
-          name="cookie"
+    <form onSubmit={handleSubmit}>
+      <Stack gap="md">
+        <Textarea
+          label={t("cookieSubmit.value")}
+          placeholder={t("cookieSubmit.placeholderMulti")}
           value={cookies}
           onChange={(e) => setCookies(e.target.value)}
-          placeholder={t("cookieSubmit.placeholderMulti")}
-          label={t("cookieSubmit.value")}
-          isTextarea={true}
-          rows={5}
-          onClear={() => setCookies("")}
           disabled={isSubmitting}
+          minRows={5}
+          autosize
         />
 
-        <div className="flex items-center justify-between">
-          <p className="text-xs text-gray-400 mt-1">
+        <Group justify="space-between" align="center">
+          <Text size="xs" c="dimmed">
             {t("cookieSubmit.descriptionMulti")}
-          </p>
+          </Text>
           <Button
-            type="button"
-            variant="secondary"
+            variant="light"
+            size="xs"
             onClick={handleImportFromBrowser}
-            disabled={isImporting || isSubmitting}
-            className="text-xs px-3 py-1"
+            loading={isImporting}
+            disabled={isSubmitting}
+            leftSection={<IconWorld size={14} />}
           >
-            {isImporting ? (
-              <span className="flex items-center gap-1">
-                <LoadingSpinner />
-                {t("cookieSubmit.browserImport.importing")}
-              </span>
-            ) : (
-              t("cookieSubmit.browserImport.button")
-            )}
+            {isImporting
+              ? t("cookieSubmit.browserImport.importing")
+              : t("cookieSubmit.browserImport.button")}
           </Button>
-        </div>
+        </Group>
 
         {overallStatus.message && (
-          <StatusMessage
-            type={overallStatus.type}
-            message={overallStatus.message}
-          />
+          <Alert
+            color={getAlertColor(overallStatus.type)}
+            icon={getAlertIcon(overallStatus.type)}
+            variant="light"
+          >
+            {overallStatus.message}
+          </Alert>
         )}
 
-        {/* Results listing */}
         {results.length > 0 && (
-          <div className="mt-4 bg-gray-800 rounded-md p-3 max-h-60 overflow-y-auto">
-            <h4 className="text-sm font-medium text-gray-300 mb-2">
+          <Paper p="sm" radius="md" withBorder>
+            <Text size="sm" fw={500} mb="sm">
               {t("cookieSubmit.resultDetails")}:
-            </h4>
-            <div className="space-y-2">
-              {results.map((result, index) => (
-                <div
-                  key={index}
-                  className={`text-xs p-2 rounded ${
-                    result.status === "success"
-                      ? "bg-green-900/30 border border-green-800"
-                      : "bg-red-900/30 border border-red-800"
-                  }`}
-                >
-                  <div className="flex items-start">
-                    <div
-                      className={`mr-2 ${
+            </Text>
+            <ScrollArea.Autosize mah={200}>
+              <Stack gap="xs">
+                {results.map((result, index) => (
+                  <Paper
+                    key={index}
+                    p="xs"
+                    radius="sm"
+                    withBorder
+                    style={{
+                      borderColor:
                         result.status === "success"
-                          ? "text-green-400"
-                          : "text-red-400"
-                      }`}
-                    >
-                      {result.status === "success" ? "✓" : "✗"}
-                    </div>
-                    <div className="flex-1">
-                      <div className="font-mono text-gray-400 truncate w-full">
-                        {result.cookie.substring(0, 30)}
-                        {result.cookie.length > 30 ? "..." : ""}
-                      </div>
-                      <div
-                        className={`mt-1 ${
-                          result.status === "success"
-                            ? "text-green-400"
-                            : "text-red-400"
-                        }`}
+                          ? "var(--mantine-color-green-7)"
+                          : "var(--mantine-color-red-7)",
+                      background:
+                        result.status === "success"
+                          ? "var(--mantine-color-green-9)"
+                          : "var(--mantine-color-red-9)",
+                    }}
+                  >
+                    <Group gap="xs" wrap="nowrap">
+                      <ThemeIcon
+                        size="sm"
+                        radius="xl"
+                        variant="filled"
+                        color={result.status === "success" ? "green" : "red"}
                       >
-                        {result.message}
+                        {result.status === "success" ? (
+                          <IconCheck size={12} />
+                        ) : (
+                          <IconX size={12} />
+                        )}
+                      </ThemeIcon>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <Text size="xs" ff="monospace" truncate>
+                          {result.cookie.substring(0, 30)}
+                          {result.cookie.length > 30 ? "..." : ""}
+                        </Text>
+                        <Text
+                          size="xs"
+                          c={result.status === "success" ? "green" : "red"}
+                        >
+                          {result.message}
+                        </Text>
                       </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+                    </Group>
+                  </Paper>
+                ))}
+              </Stack>
+            </ScrollArea.Autosize>
+          </Paper>
         )}
 
-        <Button
-          type="submit"
-          disabled={isSubmitting}
-          isLoading={isSubmitting}
-          className="w-full"
-        >
-          {isSubmitting
-            ? t("cookieSubmit.submitting")
-            : t("cookieSubmit.submitButton")}
+        <Button type="submit" loading={isSubmitting} fullWidth>
+          {isSubmitting ? t("cookieSubmit.submitting") : t("cookieSubmit.submitButton")}
         </Button>
-      </form>
-    </div>
+      </Stack>
+    </form>
   );
-};
+}
 
 export default CookieSubmitForm;

@@ -1,10 +1,19 @@
 // frontend/src/components/config/ConfigForm.tsx
-import React from "react";
 import { useTranslation } from "react-i18next";
+import {
+  TextInput,
+  PasswordInput,
+  NumberInput,
+  Checkbox,
+  Textarea,
+  Stack,
+  SimpleGrid,
+  Paper,
+  Title,
+  Text,
+  Group,
+} from "@mantine/core";
 import { ConfigData } from "../../types/config.types";
-import ConfigSection from "./ConfigSection";
-import ConfigCheckbox from "./ConfigCheckbox";
-import FormInput from "../common/FormInput";
 
 interface ConfigFormProps {
   config: ConfigData;
@@ -15,216 +24,227 @@ interface ConfigFormProps {
   ) => void;
 }
 
-const ConfigForm: React.FC<ConfigFormProps> = ({ config, onChange }) => {
+interface ConfigSectionProps {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}
+
+function ConfigSection({ title, description, children }: ConfigSectionProps) {
+  return (
+    <Paper p="md" radius="md" withBorder>
+      <Title order={5} c="cyan" mb="xs">
+        {title}
+      </Title>
+      {description && (
+        <Text size="xs" c="dimmed" mb="md">
+          {description}
+        </Text>
+      )}
+      <Stack gap="md">{children}</Stack>
+    </Paper>
+  );
+}
+
+export function ConfigForm({ config, onChange }: ConfigFormProps) {
   const { t } = useTranslation();
 
+  const handleNumberChange = (name: string) => (value: string | number) => {
+    const event = {
+      target: {
+        name,
+        value: String(value),
+        type: "number",
+      },
+    } as React.ChangeEvent<HTMLInputElement>;
+    onChange(event);
+  };
+
   return (
-    <div className="space-y-6">
-      {/* Server Settings Section */}
+    <Stack gap="md">
+      {/* Server Settings */}
       <ConfigSection
         title={t("config.sections.server.title")}
         description={t("config.sections.server.description")}
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FormInput
-            id="ip"
+        <SimpleGrid cols={{ base: 1, sm: 2 }}>
+          <TextInput
+            label={t("config.sections.server.ip")}
             name="ip"
-            type="text"
             value={config.ip}
             onChange={onChange}
-            label={t("config.sections.server.ip")}
           />
-
-          <FormInput
-            id="port"
-            name="port"
-            type="number"
-            value={config.port.toString()}
-            onChange={onChange}
+          <NumberInput
             label={t("config.sections.server.port")}
+            name="port"
+            value={config.port}
+            onChange={handleNumberChange("port")}
+            min={1}
+            max={65535}
           />
-        </div>
+        </SimpleGrid>
       </ConfigSection>
 
-      {/* App Settings Section */}
+      {/* App Settings */}
       <ConfigSection title={t("config.sections.app.title")}>
-        <div className="flex space-x-6">
-          <ConfigCheckbox
+        <Group gap="xl">
+          <Checkbox
+            label={t("config.sections.app.checkUpdate")}
             name="check_update"
             checked={config.check_update}
             onChange={onChange}
-            label={t("config.sections.app.checkUpdate")}
           />
-
-          <ConfigCheckbox
+          <Checkbox
+            label={t("config.sections.app.autoUpdate")}
             name="auto_update"
             checked={config.auto_update}
             onChange={onChange}
-            label={t("config.sections.app.autoUpdate")}
           />
-        </div>
+        </Group>
       </ConfigSection>
 
-      {/* Network Settings Section */}
+      {/* Network Settings */}
       <ConfigSection title={t("config.sections.network.title")}>
-        <FormInput
-          id="password"
-          name="password"
-          type="password"
-          value={config.password}
-          onChange={onChange}
-          label={t("config.sections.network.password")}
-        />
-
-        <FormInput
-          id="admin_password"
-          name="admin_password"
-          type="password"
-          value={config.admin_password}
-          onChange={onChange}
-          label={t("config.sections.network.adminPassword")}
-        />
-
-        <FormInput
-          id="proxy"
-          name="proxy"
-          type="text"
-          value={config.proxy || ""}
-          onChange={onChange}
-          label={t("config.sections.network.proxy")}
-          placeholder={t("config.sections.network.proxyPlaceholder")}
-        />
-
-        <FormInput
-          id="rproxy"
-          name="rproxy"
-          type="text"
-          value={config.rproxy || ""}
-          onChange={onChange}
-          label={t("config.sections.network.rproxy")}
-          placeholder={t("config.sections.network.rproxyPlaceholder")}
-        />
+        <SimpleGrid cols={{ base: 1, sm: 2 }}>
+          <PasswordInput
+            label={t("config.sections.network.password")}
+            name="password"
+            value={config.password}
+            onChange={onChange}
+          />
+          <PasswordInput
+            label={t("config.sections.network.adminPassword")}
+            name="admin_password"
+            value={config.admin_password}
+            onChange={onChange}
+          />
+        </SimpleGrid>
+        <SimpleGrid cols={{ base: 1, sm: 2 }}>
+          <TextInput
+            label={t("config.sections.network.proxy")}
+            name="proxy"
+            value={config.proxy || ""}
+            onChange={onChange}
+            placeholder={t("config.sections.network.proxyPlaceholder")}
+          />
+          <TextInput
+            label={t("config.sections.network.rproxy")}
+            name="rproxy"
+            value={config.rproxy || ""}
+            onChange={onChange}
+            placeholder={t("config.sections.network.rproxyPlaceholder")}
+          />
+        </SimpleGrid>
       </ConfigSection>
 
-      {/* API Settings Section */}
+      {/* API Settings */}
       <ConfigSection title={t("config.sections.api.title")}>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-          <FormInput
-            id="max_retries"
-            name="max_retries"
-            type="number"
-            value={config.max_retries.toString()}
-            onChange={onChange}
-            label={t("config.sections.api.maxRetries")}
-          />
-        </div>
-        <div className="flex space-x-6">
-          <ConfigCheckbox
+        <NumberInput
+          label={t("config.sections.api.maxRetries")}
+          name="max_retries"
+          value={config.max_retries}
+          onChange={handleNumberChange("max_retries")}
+          min={0}
+          max={10}
+          w={{ base: "100%", sm: "50%" }}
+        />
+        <Group gap="xl">
+          <Checkbox
+            label={t("config.sections.api.preserveChats")}
             name="preserve_chats"
             checked={config.preserve_chats}
             onChange={onChange}
-            label={t("config.sections.api.preserveChats")}
           />
-
-          <ConfigCheckbox
+          <Checkbox
+            label={t("config.sections.api.webSearch")}
             name="web_search"
             checked={config.web_search}
             onChange={onChange}
-            label={t("config.sections.api.webSearch")}
           />
-
-          <ConfigCheckbox
+          <Checkbox
+            label={t("config.sections.api.webCountTokens")}
             name="enable_web_count_tokens"
             checked={!!config.enable_web_count_tokens}
             onChange={onChange}
-            label={t("config.sections.api.webCountTokens")}
           />
-        </div>
+        </Group>
       </ConfigSection>
 
-      {/* Cookie Settings Section */}
+      {/* Cookie Settings */}
       <ConfigSection title={t("config.sections.cookie.title")}>
-        <ConfigCheckbox
-          name="skip_non_pro"
-          checked={config.skip_non_pro}
-          onChange={onChange}
-          label={t("config.sections.cookie.skipFree")}
-        />
-        <ConfigCheckbox
-          name="skip_restricted"
-          checked={config.skip_restricted}
-          onChange={onChange}
-          label={t("config.sections.cookie.skipRestricted")}
-        />
-
-        <ConfigCheckbox
-          name="skip_second_warning"
-          checked={config.skip_second_warning}
-          onChange={onChange}
-          label={t("config.sections.cookie.skipSecondWarning")}
-        />
-
-        <ConfigCheckbox
-          name="skip_first_warning"
-          checked={config.skip_first_warning}
-          onChange={onChange}
-          label={t("config.sections.cookie.skipFirstWarning")}
-        />
-
-        <ConfigCheckbox
-          name="skip_normal_pro"
-          checked={config.skip_normal_pro}
-          onChange={onChange}
-          label={t("config.sections.cookie.skipNormalPro")}
-        />
-
-        <ConfigCheckbox
-          name="skip_rate_limit"
-          checked={config.skip_rate_limit}
-          onChange={onChange}
-          label={t("config.sections.cookie.skipRateLimit")}
-        />
+        <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }}>
+          <Checkbox
+            label={t("config.sections.cookie.skipFree")}
+            name="skip_non_pro"
+            checked={config.skip_non_pro}
+            onChange={onChange}
+          />
+          <Checkbox
+            label={t("config.sections.cookie.skipRestricted")}
+            name="skip_restricted"
+            checked={config.skip_restricted}
+            onChange={onChange}
+          />
+          <Checkbox
+            label={t("config.sections.cookie.skipSecondWarning")}
+            name="skip_second_warning"
+            checked={config.skip_second_warning}
+            onChange={onChange}
+          />
+          <Checkbox
+            label={t("config.sections.cookie.skipFirstWarning")}
+            name="skip_first_warning"
+            checked={config.skip_first_warning}
+            onChange={onChange}
+          />
+          <Checkbox
+            label={t("config.sections.cookie.skipNormalPro")}
+            name="skip_normal_pro"
+            checked={config.skip_normal_pro}
+            onChange={onChange}
+          />
+          <Checkbox
+            label={t("config.sections.cookie.skipRateLimit")}
+            name="skip_rate_limit"
+            checked={config.skip_rate_limit}
+            onChange={onChange}
+          />
+        </SimpleGrid>
       </ConfigSection>
 
-      {/* Prompt Configurations Section */}
+      {/* Prompt Configurations */}
       <ConfigSection title={t("config.sections.prompt.title")}>
-        <ConfigCheckbox
+        <Checkbox
+          label={t("config.sections.prompt.realRoles")}
           name="use_real_roles"
           checked={config.use_real_roles}
           onChange={onChange}
-          label={t("config.sections.prompt.realRoles")}
         />
-
-        <FormInput
-          id="custom_h"
-          name="custom_h"
-          type="text"
-          value={config.custom_h || ""}
-          onChange={onChange}
-          label={t("config.sections.prompt.customH")}
-        />
-
-        <FormInput
-          id="custom_a"
-          name="custom_a"
-          type="text"
-          value={config.custom_a || ""}
-          onChange={onChange}
-          label={t("config.sections.prompt.customA")}
-        />
-
-        <FormInput
-          id="custom_prompt"
+        <SimpleGrid cols={{ base: 1, sm: 2 }}>
+          <TextInput
+            label={t("config.sections.prompt.customH")}
+            name="custom_h"
+            value={config.custom_h || ""}
+            onChange={onChange}
+          />
+          <TextInput
+            label={t("config.sections.prompt.customA")}
+            name="custom_a"
+            value={config.custom_a || ""}
+            onChange={onChange}
+          />
+        </SimpleGrid>
+        <Textarea
+          label={t("config.sections.prompt.customPrompt")}
           name="custom_prompt"
           value={config.custom_prompt}
           onChange={onChange}
-          label={t("config.sections.prompt.customPrompt")}
-          isTextarea={true}
-          rows={3}
+          minRows={3}
+          autosize
         />
       </ConfigSection>
-    </div>
+    </Stack>
   );
-};
+}
 
 export default ConfigForm;

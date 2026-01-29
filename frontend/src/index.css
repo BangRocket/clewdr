@@ -1,5 +1,6 @@
+/* Base styles - Mantine handles most styling */
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
@@ -8,65 +9,20 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
-.responsive-container {
-  width: 100%;
-  padding-left: 1rem;
-  padding-right: 1rem;
-  margin-left: auto;
-  margin-right: auto;
+
+/* Ensure body fills viewport */
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
 }
 
-/* Responsive breakpoints */
-@media (min-width: 640px) {
-  .responsive-container {
-    max-width: 640px;
-    padding-left: 1.5rem;
-    padding-right: 1.5rem;
+/* Pulse animation for live indicators */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
   }
-}
-
-@media (min-width: 768px) {
-  .responsive-container {
-    max-width: 768px;
-    padding-left: 2rem;
-    padding-right: 2rem;
-  }
-}
-
-@media (min-width: 1024px) {
-  .responsive-container {
-    max-width: 1024px;
-  }
-}
-
-@media (min-width: 1280px) {
-  .responsive-container {
-    max-width: 1280px;
-  }
-}
-
-/* Card container with responsive width */
-.card-container {
-  width: 100%;
-  max-width: 100%;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-@media (min-width: 640px) {
-  .card-container {
-    max-width: 32rem; /* ~512px */
-  }
-}
-
-@media (min-width: 768px) {
-  .card-container {
-    max-width: 36rem; /* ~576px */
-  }
-}
-
-@media (min-width: 1024px) {
-  .card-container {
-    max-width: 42rem; /* ~672px */
+  50% {
+    opacity: 0.5;
   }
 }

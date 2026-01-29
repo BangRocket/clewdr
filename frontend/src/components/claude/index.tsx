@@ -1,30 +1,35 @@
-import React, { useState } from "react";
+// frontend/src/components/claude/index.tsx
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import TabNavigation from "../common/TabNavigation";
+import { Tabs } from "@mantine/core";
+import { IconUpload, IconCookie } from "@tabler/icons-react";
 import CookieSubmitForm from "./CookieSubmitForm";
 import CookieVisualization from "./CookieVisualization";
 
-const ClaudeTabs: React.FC = () => {
+export function ClaudeTabs() {
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<"submit" | "status">("submit");
-
-  const tabs = [
-    { id: "submit", label: t("claudeTab.submit"), color: "blue" },
-    { id: "status", label: t("claudeTab.status"), color: "amber" },
-  ];
+  const [activeTab, setActiveTab] = useState<string | null>("submit");
 
   return (
-    <div className="w-full">
-      <TabNavigation
-        tabs={tabs}
-        activeTab={activeTab}
-        onTabChange={(tabId) => setActiveTab(tabId as "submit" | "status")}
-        className="mb-6"
-      />
+    <Tabs value={activeTab} onChange={setActiveTab}>
+      <Tabs.List>
+        <Tabs.Tab value="submit" leftSection={<IconUpload size={16} />}>
+          {t("claudeTab.submit")}
+        </Tabs.Tab>
+        <Tabs.Tab value="status" leftSection={<IconCookie size={16} />}>
+          {t("claudeTab.status")}
+        </Tabs.Tab>
+      </Tabs.List>
 
-      {activeTab === "submit" ? <CookieSubmitForm /> : <CookieVisualization />}
-    </div>
+      <Tabs.Panel value="submit" pt="md">
+        <CookieSubmitForm />
+      </Tabs.Panel>
+
+      <Tabs.Panel value="status" pt="md">
+        <CookieVisualization />
+      </Tabs.Panel>
+    </Tabs>
   );
-};
+}
 
 export default ClaudeTabs;

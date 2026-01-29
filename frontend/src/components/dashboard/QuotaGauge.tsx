@@ -1,11 +1,12 @@
-import React from "react";
+// frontend/src/components/dashboard/QuotaGauge.tsx
 import { useTranslation } from "react-i18next";
+import { Stack, Text, Progress, Skeleton, Group } from "@mantine/core";
 
 interface QuotaData {
   label: string;
   percentage: number;
   resetsAt?: string;
-  color?: "cyan" | "green" | "amber" | "red" | "violet";
+  color?: "cyan" | "green" | "yellow" | "red" | "violet";
 }
 
 interface QuotaGaugeProps {
@@ -13,82 +14,70 @@ interface QuotaGaugeProps {
   isLoading?: boolean;
 }
 
-const QuotaGauge: React.FC<QuotaGaugeProps> = ({ quotas, isLoading }) => {
+function getProgressColor(percentage: number, explicitColor?: string): string {
+  if (explicitColor) return explicitColor;
+  if (percentage >= 90) return "red";
+  if (percentage >= 70) return "yellow";
+  return "cyan";
+}
+
+export function QuotaGauge({ quotas, isLoading }: QuotaGaugeProps) {
   const { t } = useTranslation();
-
-  const getColorClasses = (percentage: number, color?: string) => {
-    if (color) {
-      const colorMap: Record<string, { bar: string; text: string }> = {
-        cyan: { bar: "bg-cyan-500", text: "text-cyan-400" },
-        green: { bar: "bg-green-500", text: "text-green-400" },
-        amber: { bar: "bg-amber-500", text: "text-amber-400" },
-        red: { bar: "bg-red-500", text: "text-red-400" },
-        violet: { bar: "bg-violet-500", text: "text-violet-400" },
-      };
-      return colorMap[color] || colorMap.cyan;
-    }
-
-    // Auto-color based on percentage
-    if (percentage >= 90) {
-      return { bar: "bg-red-500", text: "text-red-400" };
-    }
-    if (percentage >= 70) {
-      return { bar: "bg-amber-500", text: "text-amber-400" };
-    }
-    return { bar: "bg-cyan-500", text: "text-cyan-400" };
-  };
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
+      <Stack gap="md">
         {[...Array(2)].map((_, i) => (
-          <div key={i} className="animate-pulse">
-            <div className="h-4 w-32 bg-gray-600 rounded mb-2" />
-            <div className="h-3 w-full bg-gray-700 rounded" />
+          <div key={i}>
+            <Skeleton height={16} width="40%" mb="xs" />
+            <Skeleton height={8} width="100%" radius="xl" />
           </div>
         ))}
-      </div>
+      </Stack>
     );
   }
 
   if (quotas.length === 0) {
     return (
-      <div className="text-sm text-gray-500 text-center py-4">
+      <Text size="sm" c="dimmed" ta="center" py="lg">
         {t("dashboard.noQuotaData")}
-      </div>
+      </Text>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <Stack gap="md">
       {quotas.map((quota, index) => {
-        const colors = getColorClasses(quota.percentage, quota.color);
         const clampedPercentage = Math.min(100, Math.max(0, quota.percentage));
+        const color = getProgressColor(quota.percentage, quota.color);
 
         return (
           <div key={index}>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-sm text-gray-300">{quota.label}</span>
-              <span className={`text-sm font-medium ${colors.text}`}>
+            <Group justify="space-between" mb={4}>
+              <Text size="sm" c="dimmed">
+                {quota.label}
+              </Text>
+              <Text size="sm" fw={500} c={color}>
                 {quota.percentage.toFixed(1)}%
-              </span>
-            </div>
-            <div className="h-2.5 w-full bg-gray-700 rounded-full overflow-hidden">
-              <div
-                className={`h-full ${colors.bar} rounded-full transition-all duration-500`}
-                style={{ width: `${clampedPercentage}%` }}
-              />
-            </div>
+              </Text>
+            </Group>
+            <Progress
+              value={clampedPercentage}
+              color={color}
+              size="md"
+              radius="xl"
+              animated={clampedPercentage > 0 && clampedPercentage < 100}
+            />
             {quota.resetsAt && (
-              <div className="text-xs text-gray-500 mt-1">
+              <Text size="xs" c="dimmed" mt={4}>
                 {t("cookieStatus.quota.resetsAt", { time: quota.resetsAt })}
-              </div>
+              </Text>
             )}
           </div>
         );
       })}
-    </div>
+    </Stack>
   );
-};
+}
 
 export default QuotaGauge;

@@ -1,5 +1,20 @@
-import React from "react";
+// frontend/src/components/dashboard/OAuthStatus.tsx
 import { useTranslation } from "react-i18next";
+import {
+  Stack,
+  Group,
+  Text,
+  Badge,
+  Skeleton,
+  ThemeIcon,
+  Paper,
+} from "@mantine/core";
+import {
+  IconShieldCheck,
+  IconShieldOff,
+  IconAlertTriangle,
+  IconLock,
+} from "@tabler/icons-react";
 
 interface TokenInfo {
   expires_at: string;
@@ -18,15 +33,15 @@ interface OAuthStatusProps {
   isLoading?: boolean;
 }
 
-const OAuthStatus: React.FC<OAuthStatusProps> = ({ cookies, isLoading }) => {
+export function OAuthStatus({ cookies, isLoading }: OAuthStatusProps) {
   const { t } = useTranslation();
 
   if (isLoading) {
     return (
-      <div className="animate-pulse space-y-2">
-        <div className="h-4 w-32 bg-gray-600 rounded" />
-        <div className="h-3 w-24 bg-gray-600 rounded" />
-      </div>
+      <Stack gap="sm">
+        <Skeleton height={20} width="50%" />
+        <Skeleton height={16} width="30%" />
+      </Stack>
     );
   }
 
@@ -38,97 +53,124 @@ const OAuthStatus: React.FC<OAuthStatusProps> = ({ cookies, isLoading }) => {
   }).length;
   const validCount = tokensCount - expiredCount;
 
-  const getStatusColor = () => {
-    if (tokensCount === 0) return "text-gray-400";
-    if (expiredCount === tokensCount) return "text-red-400";
-    if (expiredCount > 0) return "text-amber-400";
-    return "text-green-400";
-  };
-
-  const getStatusIcon = () => {
+  const getStatusInfo = () => {
     if (tokensCount === 0) {
-      return (
-        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-        </svg>
-      );
+      return {
+        icon: <IconLock size={18} />,
+        color: "gray",
+        text: t("dashboard.oauth.noTokens"),
+      };
     }
     if (expiredCount === tokensCount) {
-      return (
-        <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-        </svg>
-      );
+      return {
+        icon: <IconShieldOff size={18} />,
+        color: "red",
+        text: t("dashboard.oauth.allExpired"),
+      };
     }
-    return (
-      <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-      </svg>
-    );
+    if (expiredCount > 0) {
+      return {
+        icon: <IconAlertTriangle size={18} />,
+        color: "yellow",
+        text: t("dashboard.oauth.someExpired", { valid: validCount, expired: expiredCount }),
+      };
+    }
+    return {
+      icon: <IconShieldCheck size={18} />,
+      color: "green",
+      text: t("dashboard.oauth.allValid", { count: validCount }),
+    };
   };
 
+  const statusInfo = getStatusInfo();
+
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        {getStatusIcon()}
-        <span className={`text-sm font-medium ${getStatusColor()}`}>
-          {tokensCount === 0
-            ? t("dashboard.oauth.noTokens")
-            : expiredCount === tokensCount
-            ? t("dashboard.oauth.allExpired")
-            : expiredCount > 0
-            ? t("dashboard.oauth.someExpired", { valid: validCount, expired: expiredCount })
-            : t("dashboard.oauth.allValid", { count: validCount })}
-        </span>
-      </div>
+    <Stack gap="sm">
+      <Group gap="xs">
+        <ThemeIcon
+          size="md"
+          variant="light"
+          color={statusInfo.color}
+          radius="xl"
+        >
+          {statusInfo.icon}
+        </ThemeIcon>
+        <Text size="sm" fw={500} c={statusInfo.color}>
+          {statusInfo.text}
+        </Text>
+      </Group>
 
       {tokensCount > 0 && (
-        <div className="text-xs text-gray-500">
+        <Text size="xs" c="dimmed">
           {t("dashboard.oauth.totalTokens", { count: tokensCount })}
-        </div>
+        </Text>
       )}
 
       {/* Token details */}
-      {cookies.filter((c) => c.token).slice(0, 3).map((cookie, index) => {
-        if (!cookie.token) return null;
-        const expiresAt = new Date(cookie.token.expires_at);
-        const isExpired = expiresAt < new Date();
-        const timeUntilExpiry = expiresAt.getTime() - Date.now();
-        const hoursUntilExpiry = Math.floor(timeUntilExpiry / (1000 * 60 * 60));
-        const minutesUntilExpiry = Math.floor((timeUntilExpiry % (1000 * 60 * 60)) / (1000 * 60));
+      <Stack gap="xs">
+        {cookies
+          .filter((c) => c.token)
+          .slice(0, 3)
+          .map((cookie, index) => {
+            if (!cookie.token) return null;
+            const expiresAt = new Date(cookie.token.expires_at);
+            const isExpired = expiresAt < new Date();
+            const timeUntilExpiry = expiresAt.getTime() - Date.now();
+            const hoursUntilExpiry = Math.floor(
+              timeUntilExpiry / (1000 * 60 * 60)
+            );
+            const minutesUntilExpiry = Math.floor(
+              (timeUntilExpiry % (1000 * 60 * 60)) / (1000 * 60)
+            );
 
-        return (
-          <div
-            key={index}
-            className={`text-xs p-2 rounded border ${
-              isExpired
-                ? "bg-red-900/20 border-red-800 text-red-400"
-                : "bg-green-900/20 border-green-800 text-green-400"
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <span className="font-mono truncate max-w-[100px]">
-                {cookie.cookie.substring(0, 10)}...
-              </span>
-              <span>
-                {isExpired
-                  ? t("dashboard.oauth.expired")
-                  : hoursUntilExpiry > 0
-                  ? t("dashboard.oauth.expiresIn", { hours: hoursUntilExpiry, minutes: minutesUntilExpiry })
-                  : t("dashboard.oauth.expiresMinutes", { minutes: minutesUntilExpiry })}
-              </span>
-            </div>
-          </div>
-        );
-      })}
+            return (
+              <Paper
+                key={index}
+                p="xs"
+                radius="sm"
+                withBorder
+                style={{
+                  borderColor: isExpired
+                    ? "var(--mantine-color-red-7)"
+                    : "var(--mantine-color-green-7)",
+                  background: isExpired
+                    ? "var(--mantine-color-red-9)"
+                    : "var(--mantine-color-green-9)",
+                }}
+              >
+                <Group justify="space-between">
+                  <Text size="xs" ff="monospace" c={isExpired ? "red" : "green"}>
+                    {cookie.cookie.substring(0, 10)}...
+                  </Text>
+                  <Badge
+                    size="xs"
+                    variant="light"
+                    color={isExpired ? "red" : "green"}
+                  >
+                    {isExpired
+                      ? t("dashboard.oauth.expired")
+                      : hoursUntilExpiry > 0
+                      ? t("dashboard.oauth.expiresIn", {
+                          hours: hoursUntilExpiry,
+                          minutes: minutesUntilExpiry,
+                        })
+                      : t("dashboard.oauth.expiresMinutes", {
+                          minutes: minutesUntilExpiry,
+                        })}
+                  </Badge>
+                </Group>
+              </Paper>
+            );
+          })}
+      </Stack>
 
       {tokensCount > 3 && (
-        <div className="text-xs text-gray-500 text-center">
+        <Text size="xs" c="dimmed" ta="center">
           {t("dashboard.oauth.andMore", { count: tokensCount - 3 })}
-        </div>
+        </Text>
       )}
-    </div>
+    </Stack>
   );
-};
+}
 
 export default OAuthStatus;

@@ -1,23 +1,31 @@
-import React, { useState, useEffect } from "react";
+// frontend/src/components/config/index.tsx
+import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import {
+  Paper,
+  Title,
+  Button,
+  Alert,
+  Stack,
+  Group,
+  Loader,
+  Center,
+} from "@mantine/core";
+import { notifications } from "@mantine/notifications";
+import { IconCheck, IconX, IconRefresh, IconDeviceFloppy } from "@tabler/icons-react";
 import { getConfig, saveConfig } from "../../api";
-import { toast } from "react-hot-toast";
 import { ConfigData } from "../../types/config.types";
-import Button from "../common/Button";
-import LoadingSpinner from "../common/LoadingSpinner";
 import ConfigForm from "./ConfigForm";
 
-const ConfigTab: React.FC = () => {
+export function ConfigTab() {
   const { t } = useTranslation();
   const [config, setConfig] = useState<ConfigData | null>(null);
   const [originalPassword, setOriginalPassword] = useState<string>("");
-  const [originalAdminPassword, setOriginalAdminPassword] =
-    useState<string>("");
+  const [originalAdminPassword, setOriginalAdminPassword] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  // Fetch config on component mount
   useEffect(() => {
     fetchConfig();
   }, []);
@@ -28,7 +36,6 @@ const ConfigTab: React.FC = () => {
     try {
       const data = await getConfig();
       setConfig(data);
-      // Store the original passwords for comparison later
       setOriginalPassword(data.password || "");
       setOriginalAdminPassword(data.admin_password || "");
     } catch (err) {
@@ -50,34 +57,34 @@ const ConfigTab: React.FC = () => {
     setError("");
     try {
       await saveConfig(config);
-      toast.success(t("config.success"));
+      notifications.show({
+        title: t("config.title"),
+        message: t("config.success"),
+        color: "green",
+        icon: <IconCheck size={16} />,
+      });
 
-      // Check if admin password was changed - this affects the current session
       const adminPasswordChanged =
         config.admin_password !== originalAdminPassword;
-
-      // Check if regular password was changed - doesn't affect current session
       const regularPasswordChanged = config.password !== originalPassword;
 
       if (regularPasswordChanged) {
-        toast.success(t("config.passwordChanged"), {
-          duration: 2000,
-          icon: "🔑",
+        notifications.show({
+          title: t("config.title"),
+          message: t("config.passwordChanged"),
+          color: "blue",
         });
       }
 
-      // If admin password changed, we need to log out and redirect
       if (adminPasswordChanged) {
-        // Show toast notification about admin password change
-        toast.success(t("config.adminPasswordChanged"), {
-          duration: 3000,
-          icon: "🔐",
+        notifications.show({
+          title: t("config.title"),
+          message: t("config.adminPasswordChanged"),
+          color: "yellow",
         });
 
-        // Wait 3 seconds before logging out to allow user to see the toast
         setTimeout(() => {
           localStorage.removeItem("authToken");
-          // Redirect with a query parameter to indicate password change
           window.location.href = "/?passwordChanged=true";
         }, 3000);
       }
@@ -88,7 +95,12 @@ const ConfigTab: React.FC = () => {
         })
       );
       console.error("Config save error:", err);
-      toast.error(t("config.error"));
+      notifications.show({
+        title: t("config.title"),
+        message: t("config.error"),
+        color: "red",
+        icon: <IconX size={16} />,
+      });
     } finally {
       setSaving(false);
     }
@@ -103,17 +115,12 @@ const ConfigTab: React.FC = () => {
 
     const { name, value, type } = e.target;
 
-    // Handle checkboxes
     if (type === "checkbox") {
       const checked = (e.target as HTMLInputElement).checked;
-      setConfig({
-        ...config,
-        [name]: checked,
-      });
+      setConfig({ ...config, [name]: checked });
       return;
     }
 
-    // Handle numbers
     if (type === "number") {
       setConfig({
         ...config,
@@ -122,7 +129,6 @@ const ConfigTab: React.FC = () => {
       return;
     }
 
-    // Handle empty strings for nullable fields
     if (
       ["proxy", "rproxy", "custom_h", "custom_a"].includes(name) &&
       value === ""
@@ -131,64 +137,69 @@ const ConfigTab: React.FC = () => {
       return;
     }
 
-    // Handle regular text inputs
-    setConfig({
-      ...config,
-      [name]: value,
-    });
+    setConfig({ ...config, [name]: value });
   };
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center p-8">
-        <LoadingSpinner size="md" />
-      </div>
+      <Center py="xl">
+        <Loader size="md" />
+      </Center>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-red-500/20 border border-red-500 rounded-lg p-4 mb-4">
-        <p className="text-red-200">{error}</p>
+      <Alert
+        color="red"
+        title={t("common.error")}
+        icon={<IconX size={16} />}
+        withCloseButton
+        onClose={() => setError("")}
+      >
+        {error}
         <Button
           onClick={fetchConfig}
-          className="mt-2 py-1 px-3"
-          variant="danger"
+          variant="light"
+          color="red"
+          size="xs"
+          mt="sm"
+          leftSection={<IconRefresh size={14} />}
         >
           {t("config.retry")}
         </Button>
-      </div>
+      </Alert>
     );
   }
 
   if (!config) {
     return (
-      <div className="bg-amber-500/20 border border-amber-500 rounded-lg p-4">
-        <p className="text-amber-200">{t("config.noData")}</p>
-      </div>
+      <Alert color="yellow" title={t("config.noData")}>
+        {t("config.noData")}
+      </Alert>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h3 className="text-lg font-medium text-white">{t("config.title")}</h3>
+    <Stack gap="md">
+      <Group justify="space-between">
+        <Title order={3}>{t("config.title")}</Title>
         <Button
           onClick={handleSave}
-          disabled={saving}
-          isLoading={saving}
-          className="py-2 px-4 bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-400 hover:to-purple-400"
-          variant="primary"
+          loading={saving}
+          leftSection={<IconDeviceFloppy size={16} />}
+          variant="gradient"
+          gradient={{ from: "cyan", to: "violet", deg: 90 }}
         >
           {saving ? t("config.saving") : t("config.saveButton")}
         </Button>
-      </div>
+      </Group>
 
-      <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+      <Paper p="md" radius="md" withBorder>
         <ConfigForm config={config} onChange={handleChange} />
-      </div>
-    </div>
+      </Paper>
+    </Stack>
   );
-};
+}
 
 export default ConfigTab;

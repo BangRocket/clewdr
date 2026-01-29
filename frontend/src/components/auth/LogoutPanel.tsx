@@ -1,31 +1,35 @@
-import React from "react";
+// frontend/src/components/auth/LogoutPanel.tsx
 import { useTranslation } from "react-i18next";
-import Button from "../common/Button";
+import { Paper, Group, Title, Text, Button, Stack } from "@mantine/core";
+import { IconLogout } from "@tabler/icons-react";
 
 interface LogoutPanelProps {
   onLogout: () => void;
 }
 
-const LogoutPanel: React.FC<LogoutPanelProps> = ({ onLogout }) => {
+export function LogoutPanel({ onLogout }: LogoutPanelProps) {
   const { t } = useTranslation();
 
   return (
-    <div className="bg-gray-700 p-6 rounded-lg">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-medium text-white">
-          {t("auth.authTitle")}
-        </h3>
-        <Button
-          onClick={onLogout}
-          variant="danger"
-          className="py-2 px-4 text-sm"
-        >
-          {t("auth.logout")}
-        </Button>
-      </div>
-      <p className="text-gray-300 text-sm mb-4">{t("auth.loggedInMessage")}</p>
-    </div>
+    <Paper p="lg" radius="md">
+      <Stack gap="md">
+        <Group justify="space-between">
+          <Title order={4}>{t("auth.authTitle")}</Title>
+          <Button
+            onClick={onLogout}
+            color="red"
+            variant="light"
+            leftSection={<IconLogout size={16} />}
+          >
+            {t("auth.logout")}
+          </Button>
+        </Group>
+        <Text c="dimmed" size="sm">
+          {t("auth.loggedInMessage")}
+        </Text>
+      </Stack>
+    </Paper>
   );
-};
+}
 
 export default LogoutPanel;

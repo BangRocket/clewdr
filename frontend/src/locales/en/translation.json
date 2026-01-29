@@ -36,7 +36,25 @@
       "expiresIn": "{{hours}}h {{minutes}}m",
       "expiresMinutes": "{{minutes}}m",
       "andMore": "+{{count}} more"
+    },
+    "tokenCost": {
+      "title": "Token Usage & Cost",
+      "estimatedCost": "Estimated Cost",
+      "basedOnSonnet": "Based on Claude 3.5 Sonnet pricing",
+      "type": "Type",
+      "tokens": "Tokens",
+      "cost": "Cost",
+      "total": "Total",
+      "modelComparison": "Cost by Model",
+      "model": "Model"
     }
+  },
+  "theme": {
+    "light": "Light mode",
+    "dark": "Dark mode"
+  },
+  "settings": {
+    "language": "Language"
   },
   "auth": {
     "title": "Authentication Required",

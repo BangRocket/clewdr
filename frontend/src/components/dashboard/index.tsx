@@ -1,11 +1,14 @@
-import React, { useState, useEffect, useCallback } from "react";
+// frontend/src/components/dashboard/index.tsx
+import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import { Grid, Paper, Text, Stack, Box } from "@mantine/core";
 import { getCookieStatus } from "../../api";
 import UsageSummary from "./UsageSummary";
 import QuotaGauge from "./QuotaGauge";
 import QuickActions from "./QuickActions";
 import LogsPanel from "./LogsPanel";
 import OAuthStatus from "./OAuthStatus";
+import TokenCostCalculator from "./TokenCostCalculator";
 
 interface TokenInfo {
   expires_at: string;
@@ -21,6 +24,8 @@ interface CookieItem {
   seven_day_utilization?: number;
   seven_day_sonnet_utilization?: number;
   seven_day_opus_utilization?: number;
+  input_tokens?: number;
+  output_tokens?: number;
 }
 
 interface CookieData {
@@ -29,7 +34,7 @@ interface CookieData {
   invalid: CookieItem[];
 }
 
-const Dashboard: React.FC = () => {
+export function Dashboard() {
   const { t } = useTranslation();
   const [cookieData, setCookieData] = useState<CookieData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -47,7 +52,6 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     fetchCookieStatus();
-    // Refresh every 30 seconds
     const interval = setInterval(fetchCookieStatus, 30000);
     return () => clearInterval(interval);
   }, [fetchCookieStatus]);
@@ -61,7 +65,7 @@ const Dashboard: React.FC = () => {
     const invalid = cookieData.invalid?.length || 0;
     return {
       valid,
-      inUse: 0, // API doesn't separate in-use
+      inUse: 0,
       exhausted,
       invalid,
       total: valid + exhausted + invalid,
@@ -70,10 +74,7 @@ const Dashboard: React.FC = () => {
 
   const getAllCookies = (): CookieItem[] => {
     if (!cookieData) return [];
-    return [
-      ...(cookieData.valid || []),
-      ...(cookieData.exhausted || []),
-    ];
+    return [...(cookieData.valid || []), ...(cookieData.exhausted || [])];
   };
 
   const getAverageQuotas = () => {
@@ -85,8 +86,10 @@ const Dashboard: React.FC = () => {
     );
     const avgSession =
       cookiesWithSession.length > 0
-        ? cookiesWithSession.reduce((sum, c) => sum + (c.session_utilization || 0), 0) /
-          cookiesWithSession.length
+        ? cookiesWithSession.reduce(
+            (sum, c) => sum + (c.session_utilization || 0),
+            0
+          ) / cookiesWithSession.length
         : 0;
 
     const cookiesWithSonnet = allCookies.filter(
@@ -94,8 +97,10 @@ const Dashboard: React.FC = () => {
     );
     const avgSonnet =
       cookiesWithSonnet.length > 0
-        ? cookiesWithSonnet.reduce((sum, c) => sum + (c.seven_day_sonnet_utilization || 0), 0) /
-          cookiesWithSonnet.length
+        ? cookiesWithSonnet.reduce(
+            (sum, c) => sum + (c.seven_day_sonnet_utilization || 0),
+            0
+          ) / cookiesWithSonnet.length
         : null;
 
     const cookiesWithOpus = allCookies.filter(
@@ -103,15 +108,24 @@ const Dashboard: React.FC = () => {
     );
     const avgOpus =
       cookiesWithOpus.length > 0
-        ? cookiesWithOpus.reduce((sum, c) => sum + (c.seven_day_opus_utilization || 0), 0) /
-          cookiesWithOpus.length
+        ? cookiesWithOpus.reduce(
+            (sum, c) => sum + (c.seven_day_opus_utilization || 0),
+            0
+          ) / cookiesWithOpus.length
         : null;
 
-    type QuotaColor = "cyan" | "green" | "amber" | "red" | "violet";
-    const quotas: Array<{ label: string; percentage: number; color?: QuotaColor }> = [];
+    type QuotaColor = "cyan" | "green" | "yellow" | "red" | "violet";
+    const quotas: Array<{
+      label: string;
+      percentage: number;
+      color?: QuotaColor;
+    }> = [];
 
     if (cookiesWithSession.length > 0) {
-      quotas.push({ label: t("cookieStatus.quota.session"), percentage: avgSession });
+      quotas.push({
+        label: t("cookieStatus.quota.session"),
+        percentage: avgSession,
+      });
     }
 
     if (avgSonnet !== null) {
@@ -133,49 +147,81 @@ const Dashboard: React.FC = () => {
     return quotas;
   };
 
+  // Calculate token usage from cookies
+  const getTokenUsage = () => {
+    const allCookies = getAllCookies();
+    let totalInput = 0;
+    let totalOutput = 0;
+
+    allCookies.forEach((cookie) => {
+      if (cookie.input_tokens) totalInput += cookie.input_tokens;
+      if (cookie.output_tokens) totalOutput += cookie.output_tokens;
+    });
+
+    return { totalInput, totalOutput };
+  };
+
+  const { totalInput, totalOutput } = getTokenUsage();
+
   return (
-    <div className="h-full flex flex-col lg:flex-row gap-6">
-      {/* Left panel - Stats & Actions */}
-      <div className="w-full lg:w-80 flex-shrink-0 space-y-4">
-        {/* Usage Summary Cards */}
-        <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700">
-          <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-4">
-            {t("dashboard.usageSummary")}
-          </h2>
-          <UsageSummary counts={getCounts()} isLoading={isLoading} />
-        </div>
+    <Grid gutter="md">
+      {/* Left column - Stats & Actions */}
+      <Grid.Col span={{ base: 12, lg: 4 }}>
+        <Stack gap="md">
+          {/* Usage Summary */}
+          <Paper p="md" radius="md" withBorder>
+            <Text size="xs" c="dimmed" tt="uppercase" fw={500} mb="md">
+              {t("dashboard.usageSummary")}
+            </Text>
+            <UsageSummary counts={getCounts()} isLoading={isLoading} />
+          </Paper>
 
-        {/* Quota Gauges */}
-        <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700">
-          <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-4">
-            {t("dashboard.quotaUsage")}
-          </h2>
-          <QuotaGauge quotas={getAverageQuotas()} isLoading={isLoading} />
-        </div>
+          {/* Quota Gauges */}
+          <Paper p="md" radius="md" withBorder>
+            <Text size="xs" c="dimmed" tt="uppercase" fw={500} mb="md">
+              {t("dashboard.quotaUsage")}
+            </Text>
+            <QuotaGauge quotas={getAverageQuotas()} isLoading={isLoading} />
+          </Paper>
 
-        {/* OAuth Status */}
-        <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700">
-          <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-4">
-            {t("dashboard.oauth.title")}
-          </h2>
-          <OAuthStatus cookies={getAllCookies()} isLoading={isLoading} />
-        </div>
+          {/* Token Cost Calculator */}
+          <Paper p="md" radius="md" withBorder>
+            <Text size="xs" c="dimmed" tt="uppercase" fw={500} mb="md">
+              {t("dashboard.tokenCost.title")}
+            </Text>
+            <TokenCostCalculator
+              totalInputTokens={totalInput}
+              totalOutputTokens={totalOutput}
+              isLoading={isLoading}
+            />
+          </Paper>
 
-        {/* Quick Actions */}
-        <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700">
-          <QuickActions
-            onCookieSubmitted={fetchCookieStatus}
-            onRefresh={fetchCookieStatus}
-          />
-        </div>
-      </div>
+          {/* OAuth Status */}
+          <Paper p="md" radius="md" withBorder>
+            <Text size="xs" c="dimmed" tt="uppercase" fw={500} mb="md">
+              {t("dashboard.oauth.title")}
+            </Text>
+            <OAuthStatus cookies={getAllCookies()} isLoading={isLoading} />
+          </Paper>
 
-      {/* Right panel - Console Logs */}
-      <div className="flex-1 min-w-0">
-        <LogsPanel />
-      </div>
-    </div>
+          {/* Quick Actions */}
+          <Paper p="md" radius="md" withBorder>
+            <QuickActions
+              onCookieSubmitted={fetchCookieStatus}
+              onRefresh={fetchCookieStatus}
+            />
+          </Paper>
+        </Stack>
+      </Grid.Col>
+
+      {/* Right column - Console Logs */}
+      <Grid.Col span={{ base: 12, lg: 8 }}>
+        <Box h={{ base: 500, lg: "calc(100vh - 180px)" }}>
+          <LogsPanel />
+        </Box>
+      </Grid.Col>
+    </Grid>
   );
-};
+}
 
 export default Dashboard;
