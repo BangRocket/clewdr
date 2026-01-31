@@ -3,10 +3,8 @@ use std::{
     hash::Hash,
     ops::Deref,
     str::FromStr,
-    sync::LazyLock,
 };
 
-use regex;
 use serde::{Deserialize, Serialize};
 use snafu::{GenerateImplicitData, Location};
 use tracing::info;
@@ -55,7 +53,7 @@ impl Serialize for ClewdrCookie {
     where
         S: serde::Serializer,
     {
-        serializer.serialize_str(&self.to_string())
+        serializer.serialize_str(&self.inner)
     }
 }
 
@@ -385,8 +383,8 @@ impl Default for ClewdrCookie {
 impl ClewdrCookie {
     pub fn ellipse(&self) -> String {
         let len = self.inner.len();
-        if len > 10 {
-            format!("{}...", &self.inner[..10])
+        if len > 20 {
+            format!("{}...", &self.inner[..20])
         } else {
             self.inner.to_owned()
         }
@@ -397,33 +395,27 @@ impl FromStr for ClewdrCookie {
     type Err = ClewdrError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        static RE: LazyLock<regex::Regex> = LazyLock::new(|| {
-            regex::Regex::new(r"(?:sk-ant-sid01-)?([0-9A-Za-z_-]{86}-[0-9A-Za-z_-]{6}AA)").unwrap()
-        });
+        let trimmed = s.trim();
+        let cleaned = trimmed
+            .strip_prefix("sessionKey=")
+            .unwrap_or(trimmed)
+            .trim()
+            .to_string();
 
-        let cleaned = s
-            .chars()
-            .filter(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-')
-            .collect::<String>();
-
-        if let Some(captures) = RE.captures(&cleaned)
-            && let Some(cookie_match) = captures.get(1)
-        {
-            return Ok(Self {
-                inner: cookie_match.as_str().to_string(),
+        if cleaned.is_empty() {
+            return Err(ClewdrError::ParseCookieError {
+                loc: Location::generate(),
+                msg: "Invalid cookie format",
             });
         }
 
-        Err(ClewdrError::ParseCookieError {
-            loc: Location::generate(),
-            msg: "Invalid cookie format",
-        })
+        Ok(Self { inner: cleaned })
     }
 }
 
 impl Display for ClewdrCookie {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "sessionKey=sk-ant-sid01-{}", self.inner)
+        write!(f, "sessionKey={}", self.inner)
     }
 }
 
@@ -439,8 +431,10 @@ mod tests {
 
     #[test]
     fn test_sk_cookie_from_str() {
-        let cookie = ClewdrCookie::from_str("sk-ant-sid01----------------------------SET_YOUR_COOKIE_HERE----------------------------------------AAAAAAAA").unwrap();
-        assert_eq!(cookie.inner.len(), 95);
+        let cookie = ClewdrCookie::from_str("sk-ant-sidXX----------------------------SET_YOUR_COOKIE_HERE----------------------------------------AAAAAAAA").unwrap();
+        assert!(cookie.inner.starts_with("sk-ant-sid"));
+        assert!(cookie.inner.ends_with("AA"));
+        assert!(cookie.inner.len() > 95);
     }
 
     #[test]

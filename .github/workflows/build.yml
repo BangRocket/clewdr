@@ -59,7 +59,7 @@ jobs:
     needs: build-frontend
     strategy:
       matrix:
-        os: [linux, musllinux, android, windows, macos]
+        os: [linux, android, windows, macos]
         target_arch: [x86_64, aarch64]
         include:
           # rust target vendor + system + environment
@@ -69,8 +69,6 @@ jobs:
             target_vendor_sys_env: apple-darwin
           - os: linux
             target_vendor_sys_env: unknown-linux-gnu
-          - os: musllinux
-            target_vendor_sys_env: unknown-linux-musl
           - os: windows
             target_vendor_sys_env: pc-windows-msvc
           # runner
@@ -84,9 +82,6 @@ jobs:
             runner: windows-latest
           - os: macos
             runner: macos-latest
-          # musl packages
-          - os: musllinux
-            musl_packages: "clang musl-tools"
         exclude:
           - os: android
             target_arch: x86_64
@@ -113,7 +108,7 @@ jobs:
         if: contains(matrix.runner, 'ubuntu')
         run: |
           sudo apt-get update
-          sudo apt-get install -y ${{ matrix.musl_packages }} ${{ env.APT_PACKAGES }}
+          sudo apt-get install -y ${{ env.APT_PACKAGES }}
 
       - name: Install Chocolatey Packages
         if: matrix.os == 'windows'
@@ -145,11 +140,6 @@ jobs:
         if: ${{ matrix.os != 'android' }}
         shell: bash
         run: |
-          if [ ${{ matrix.os }} == "musllinux" ]; then
-            export CXX=${{ matrix.target_arch }}-linux-gnu-g++
-            export CFLAGS="-D_FORTIFY_SOURCE=0"
-            export CXXFLAGS="-D_FORTIFY_SOURCE=0"
-          fi
           if [ ${{ matrix.os }} == "windows" ]; then
             export RUSTFLAGS="-C target-feature=+crt-static"
           fi

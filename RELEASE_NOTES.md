@@ -1,4 +1,4 @@
 # Release Notes
 
-- Fix toolcall param bug
-- Expand Claude message schema support (tool_choice strings, content block variants, image sources, stop reasons)
+- feat: replace RequireXApiKeyAuth with RequireFlexibleAuth fully to support bear token
+- chore: increase cookie log ellipsis length to 20 chars

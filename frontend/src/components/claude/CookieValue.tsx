@@ -14,11 +14,9 @@ const CookieValue: React.FC<CookieValueProps> = ({ cookie }) => {
 
   if (!cookie) return null;
 
-  // Clean cookie value for display
-  const cleanCookie = cookie.replace(/sessionKey=sk-ant-sid01-/, "");
   const displayText = isExpanded
-    ? cleanCookie
-    : `${cleanCookie.substring(0, 30)}${cleanCookie.length > 30 ? "..." : ""}`;
+    ? cookie
+    : `${cookie.substring(0, 30)}${cookie.length > 30 ? "..." : ""}`;
 
   const copyToClipboard = (text: string, event: React.MouseEvent) => {
     event.stopPropagation();
@@ -52,7 +50,7 @@ const CookieValue: React.FC<CookieValueProps> = ({ cookie }) => {
           >
             {displayText}
           </Code>
-          {cleanCookie.length > 30 && (
+          {cookie.length > 30 && (
             <Box c="dimmed" style={{ flexShrink: 0 }}>
               {isExpanded ? (
                 <IconChevronUp size={14} />
@@ -68,7 +66,7 @@ const CookieValue: React.FC<CookieValueProps> = ({ cookie }) => {
           variant="subtle"
           color="gray"
           size="sm"
-          onClick={(e) => copyToClipboard(cleanCookie, e)}
+          onClick={(e) => copyToClipboard(cookie, e)}
         >
           <IconCopy size={14} />
         </ActionIcon>

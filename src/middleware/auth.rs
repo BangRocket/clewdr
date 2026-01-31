@@ -106,8 +106,32 @@ where
 ///
 /// This extractor validates the X-API-Key header against the configured API keys.
 /// It's used to protect Claude-compatible API endpoints.
-pub struct RequireXApiKeyAuth;
-impl<S> FromRequestParts<S> for RequireXApiKeyAuth
+// pub struct RequireXApiKeyAuth;
+// impl<S> FromRequestParts<S> for RequireXApiKeyAuth
+// where
+//     S: Sync,
+// {
+//     type Rejection = ClewdrError;
+//     async fn from_request_parts(
+//         parts: &mut axum::http::request::Parts,
+//         _: &S,
+//     ) -> Result<Self, Self::Rejection> {
+//         let XApiKey(key) = XApiKey::from_request_parts(parts, &()).await?;
+//         if !CLEWDR_CONFIG.load().user_auth(&key) {
+//             warn!("Invalid x-api-key: {}", key);
+//             return Err(ClewdrError::InvalidAuth);
+//         }
+//         Ok(Self)
+//     }
+// }
+
+/// Middleware guard that accepts both X-API-Key and Bearer token authentication
+///
+/// This extractor first tries to validate the X-API-Key header, and if not present,
+/// falls back to Bearer token authentication. This is useful for Claude Code CLI
+/// which uses ANTHROPIC_AUTH_TOKEN and may send only Authorization header.
+pub struct RequireFlexibleAuth;
+impl<S> FromRequestParts<S> for RequireFlexibleAuth
 where
     S: Sync,
 {
@@ -116,11 +140,25 @@ where
         parts: &mut axum::http::request::Parts,
         _: &S,
     ) -> Result<Self, Self::Rejection> {
-        let XApiKey(key) = XApiKey::from_request_parts(parts, &()).await?;
-        if !CLEWDR_CONFIG.load().user_auth(&key) {
-            warn!("Invalid x-api-key: {}", key);
-            return Err(ClewdrError::InvalidAuth);
+        // Try X-API-Key first
+        if let Some(key) = parts
+            .headers
+            .get("x-api-key")
+            .and_then(|v| v.to_str().ok())
+        {
+            if CLEWDR_CONFIG.load().user_auth(key) {
+                return Ok(Self);
+            }
         }
-        Ok(Self)
+
+        // Fall back to Bearer token
+        if let Ok(AuthBearer(key)) = AuthBearer::from_request_parts(parts, &()).await {
+            if CLEWDR_CONFIG.load().user_auth(&key) {
+                return Ok(Self);
+            }
+        }
+
+        warn!("No valid authentication found (tried x-api-key and Bearer)");
+        Err(ClewdrError::InvalidAuth)
     }
 }
