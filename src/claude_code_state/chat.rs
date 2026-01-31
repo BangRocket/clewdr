@@ -7,11 +7,12 @@ use eventsource_stream::Eventsource;
 use futures::TryStreamExt;
 use http::header::{ACCEPT, USER_AGENT};
 use snafu::{GenerateImplicitData, ResultExt};
+use std::time::Instant;
 use tracing::{Instrument, error, info, warn};
 use wreq::Method;
 
 use crate::{
-    claude_code_state::{ClaudeCodeState, TokenStatus},
+    claude_code_state::{ClaudeCodeState, TokenStatus, telemetry::{TenguEvent, track}},
     config::{CLEWDR_CONFIG, ModelFamily},
     error::{CheckClaudeErr, ClewdrError, WreqSnafu},
     services::cookie_actor::CookieActorHandle,
@@ -157,10 +158,23 @@ impl ClaudeCodeState {
         access_token: String,
         mut p: CreateMessageParams,
     ) -> Result<axum::response::Response, ClewdrError> {
+        let request_start = Instant::now();
         let (base_model, requested_1m) = match p.model.strip_suffix("-1M") {
             Some(stripped) => (stripped.to_string(), true),
             None => (p.model.clone(), false),
         };
+
+        // Track API query event
+        let account_uuid = self.cookie.as_ref().and_then(|c| c.token.as_ref()).map(|t| t.organization.uuid.as_str());
+        track(
+            TenguEvent::ApiQuery {
+                model: base_model.clone(),
+                input_tokens: self.usage.input_tokens as u64,
+                streaming: self.stream,
+            },
+            account_uuid,
+            Some(&access_token),
+        ).await;
 
         let is_sonnet = Self::is_sonnet4_model(&base_model);
         let cookie_support = self

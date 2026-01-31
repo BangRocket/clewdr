@@ -1,6 +1,7 @@
 mod chat;
 mod exchange;
 mod organization;
+pub mod telemetry;
 use http::{
     HeaderValue, Method,
     header::{ORIGIN, REFERER},

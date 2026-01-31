@@ -129,6 +129,11 @@ async fn main() -> Result<(), ClewdrError> {
     // Initialize MCP router
     clewdr::mcp::init_mcp_router().await;
 
+    // Initialize Claude Code telemetry emulation
+    clewdr::claude_code_state::telemetry::init_cc_telemetry(
+        CLEWDR_CONFIG.load().claude_code_telemetry
+    );
+
     // build axum router
     // create a TCP listener
     let addr = CLEWDR_CONFIG.load().address();

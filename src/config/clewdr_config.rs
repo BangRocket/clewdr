@@ -126,6 +126,9 @@ pub struct ClewdrConfig {
     pub claude_code_client_id: Option<String>,
     #[serde(default)]
     pub custom_system: Option<String>,
+    /// Enable Claude Code telemetry emulation for better compatibility
+    #[serde(default)]
+    pub claude_code_telemetry: bool,
 
     // MCP settings, can hot reload
     #[serde(default)]
@@ -168,6 +171,7 @@ impl Default for ClewdrConfig {
             skip_normal_pro: false,
             claude_code_client_id: None,
             custom_system: None,
+            claude_code_telemetry: false,
             mcp_enabled: false,
             mcp_servers: Vec::new(),
             no_fs: false,

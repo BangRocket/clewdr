@@ -243,6 +243,19 @@ export function ConfigForm({ config, onChange }: ConfigFormProps) {
           autosize
         />
       </ConfigSection>
+
+      {/* Claude Code Settings */}
+      <ConfigSection
+        title={t("config.sections.claudeCode.title")}
+        description={t("config.sections.claudeCode.description")}
+      >
+        <Checkbox
+          label={t("config.sections.claudeCode.telemetry")}
+          name="claude_code_telemetry"
+          checked={config.claude_code_telemetry || false}
+          onChange={onChange}
+        />
+      </ConfigSection>
     </Stack>
   );
 }

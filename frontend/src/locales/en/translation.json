@@ -242,6 +242,11 @@
         "customH": "Custom Human (optional)",
         "customA": "Custom Assistant (optional)",
         "customPrompt": "Custom Prompt"
+      },
+      "claudeCode": {
+        "title": "Claude Code Settings",
+        "description": "Settings for Claude Code API compatibility",
+        "telemetry": "Enable Claude Code Telemetry (improves compatibility)"
       }
     }
   },

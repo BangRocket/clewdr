@@ -36,6 +36,9 @@ export interface ConfigData {
   custom_prompt: string;
   claude_code_client_id?: string | null;
   custom_system?: string | null;
+
+  // Claude Code settings
+  claude_code_telemetry?: boolean;
 }
 
 export interface ConfigState {
