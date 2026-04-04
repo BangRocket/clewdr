@@ -127,6 +127,8 @@ pub struct ClewdrConfig {
     pub claude_code_client_id: Option<String>,
     #[serde(default)]
     pub custom_system: Option<String>,
+    #[serde(default)]
+    pub claude_code_telemetry: bool,
 
     // Skip field, can hot reload
     #[serde(skip)]
@@ -164,6 +166,7 @@ impl Default for ClewdrConfig {
             skip_normal_pro: false,
             claude_code_client_id: None,
             custom_system: None,
+            claude_code_telemetry: false,
             no_fs: false,
             log_to_file: false,
         }

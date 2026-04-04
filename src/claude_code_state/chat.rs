@@ -13,7 +13,10 @@ use tracing::{Instrument, error, info, warn};
 use wreq::Method;
 
 use crate::{
-    claude_code_state::{ClaudeCodeState, TokenStatus},
+    claude_code_state::{
+        ClaudeCodeState, TokenStatus,
+        telemetry::{self, EventData},
+    },
     config::{CLAUDE_CODE_USER_AGENT, CLEWDR_CONFIG, Claude1mChannel, ModelFamily},
     error::{CheckClaudeErr, ClewdrError, WreqSnafu},
     services::cookie_actor::CookieActorHandle,
@@ -138,12 +141,51 @@ impl ClaudeCodeState {
         };
 
         let model_family = Self::classify_model(&p.model);
+
+        // Extract org UUID for telemetry identification (no tokens forwarded)
+        let telemetry_org = self
+            .cookie
+            .as_ref()
+            .and_then(|c| c.token.as_ref())
+            .map(|t| t.organization.uuid.clone());
+
         for (idx, use_context_1m) in attempts.iter().copied().enumerate() {
+            // Emit tengu_api_query before the request
+            telemetry::track(
+                "tengu_api_query",
+                p.model.clone(),
+                EventData {
+                    model: Some(p.model.clone()),
+                    input_tokens: Some(self.usage.input_tokens as u64),
+                    streaming: Some(self.stream),
+                    ..Default::default()
+                },
+                None, // account_uuid not available
+                telemetry_org.clone(),
+                None, // email not available
+            );
+
+            let start = std::time::Instant::now();
             match self
                 .execute_claude_request(&access_token, &p, use_context_1m)
                 .await
             {
                 Ok(response) => {
+                    // Emit tengu_api_success
+                    telemetry::track(
+                        "tengu_api_success",
+                        p.model.clone(),
+                        EventData {
+                            model: Some(p.model.clone()),
+                            input_tokens: Some(self.usage.input_tokens as u64),
+                            duration_ms: Some(start.elapsed().as_millis() as u64),
+                            ..Default::default()
+                        },
+                        None, // account_uuid not available
+                        telemetry_org.clone(),
+                        None, // email not available
+                    );
+
                     if let Some(ch) = channel
                         && use_context_1m
                     {
@@ -152,6 +194,28 @@ impl ClaudeCodeState {
                     return self.handle_success_response(response, model_family).await;
                 }
                 Err(err) => {
+                    // Emit tengu_api_error
+                    let (error_type, status_code) = match &err {
+                        ClewdrError::ClaudeHttpError { code, .. } => {
+                            (format!("http_{}", code.as_u16()), Some(code.as_u16()))
+                        }
+                        _ => (format!("{:?}", err), None),
+                    };
+                    telemetry::track(
+                        "tengu_api_error",
+                        p.model.clone(),
+                        EventData {
+                            model: Some(p.model.clone()),
+                            error_type: Some(error_type),
+                            status_code,
+                            duration_ms: Some(start.elapsed().as_millis() as u64),
+                            ..Default::default()
+                        },
+                        None, // account_uuid not available
+                        telemetry_org.clone(),
+                        None, // email not available
+                    );
+
                     let is_last_attempt = idx + 1 == attempts.len();
                     let should_fallback = use_context_1m
                         && !is_last_attempt
