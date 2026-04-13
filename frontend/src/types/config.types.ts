@@ -22,6 +22,9 @@ export interface ConfigData {
   enable_web_count_tokens: boolean;
   sanitize_messages: boolean;
 
+  // Claude Code settings
+  claude_code_telemetry?: boolean;
+
   // Cookie settings
   skip_first_warning: boolean;
   skip_second_warning: boolean;

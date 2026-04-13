@@ -1,6 +1,7 @@
 mod chat;
 mod exchange;
 mod organization;
+pub mod telemetry;
 use http::{
     HeaderValue, Method,
     header::{COOKIE, ORIGIN, REFERER, USER_AGENT},

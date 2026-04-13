@@ -126,6 +126,11 @@ async fn main() -> Result<(), ClewdrError> {
     println!("Config dir: {}", CONFIG_PATH.display().to_string().blue());
     println!("{}", *CLEWDR_CONFIG);
 
+    // Initialize Claude Code telemetry emulation
+    clewdr::claude_code_state::telemetry::init_telemetry(
+        CLEWDR_CONFIG.load().claude_code_telemetry,
+    );
+
     // build axum router
     // create a TCP listener
     let addr = CLEWDR_CONFIG.load().address();
