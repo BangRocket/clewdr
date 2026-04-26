@@ -111,7 +111,7 @@ const CookieUsageDetail: React.FC<Props> = ({
               key={b}
               type="button"
               onClick={() => setBucket(b)}
-              className={`min-h-[36px] rounded-md border px-3 ${
+              className={`min-h-[44px] rounded-md border px-3 ${
                 bucket === b
                   ? "border-blue-500 bg-blue-500/20 text-blue-300"
                   : "border-gray-700 bg-gray-800 text-gray-300 hover:bg-gray-700"
@@ -127,7 +127,7 @@ const CookieUsageDetail: React.FC<Props> = ({
               key={s}
               type="button"
               onClick={() => setSource(s)}
-              className={`min-h-[36px] rounded-md border px-3 ${
+              className={`min-h-[44px] rounded-md border px-3 ${
                 source === s
                   ? "border-blue-500 bg-blue-500/20 text-blue-300"
                   : "border-gray-700 bg-gray-800 text-gray-300 hover:bg-gray-700"

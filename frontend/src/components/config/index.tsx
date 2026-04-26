@@ -179,7 +179,7 @@ const ConfigTab: React.FC = () => {
           onClick={handleSave}
           disabled={saving}
           isLoading={saving}
-          className="py-2 px-4 bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-400 hover:to-purple-400"
+          className="py-2 px-4 min-h-[44px] bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-400 hover:to-purple-400"
           variant="primary"
         >
           {saving ? t("config.saving") : t("config.saveButton")}
