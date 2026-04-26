@@ -295,8 +295,17 @@ impl CookieStatus {
         self.weekly_opus_resets_at = ts;
     }
 
-    pub fn add_and_bucket_usage(&mut self, input: u64, output: u64, family: ModelFamily) {
-        if input == 0 && output == 0 {
+    pub fn add_and_bucket_usage(
+        &mut self,
+        input: u64,
+        output: u64,
+        cache_read: u64,
+        cache_create: u64,
+        family: ModelFamily,
+        model: &str,
+        source: crate::config::UsageSource,
+    ) {
+        if input == 0 && output == 0 && cache_read == 0 && cache_create == 0 {
             return;
         }
         // Legacy totals/windows removed; only bucketed aggregation remains
@@ -414,6 +423,35 @@ impl CookieStatus {
                     .saturating_add(output);
             }
             ModelFamily::Other => {}
+        }
+
+        // Cost calculation
+        let cost = crate::services::pricing::cost(model, input, output, cache_read, cache_create);
+        self.session_cost_usd += cost;
+        self.weekly_cost_usd += cost;
+        self.lifetime_cost_usd += cost;
+        match family {
+            ModelFamily::Sonnet => self.weekly_sonnet_cost_usd += cost,
+            ModelFamily::Opus => self.weekly_opus_cost_usd += cost,
+            ModelFamily::Other => {}
+        }
+
+        // Fire-and-forget event to UsageActor
+        if let Some(actor) = crate::services::usage_actor::USAGE_ACTOR.get() {
+            actor.try_record(
+                self.history_id(),
+                crate::config::UsageEvent {
+                    ts: chrono::Utc::now().timestamp(),
+                    source,
+                    model: model.to_string(),
+                    family,
+                    input_tokens: input,
+                    output_tokens: output,
+                    cache_read_tokens: cache_read,
+                    cache_creation_tokens: cache_create,
+                    cost_usd: cost,
+                },
+            );
         }
     }
 

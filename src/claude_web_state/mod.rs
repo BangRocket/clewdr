@@ -174,7 +174,20 @@ impl ClaudeWebState {
                 .as_ref()
                 .map(|p| Self::classify_model(&p.model))
                 .unwrap_or(crate::config::ModelFamily::Other);
-            cookie.add_and_bucket_usage(input, output, family);
+            let model = self
+                .last_params
+                .as_ref()
+                .map(|p| p.model.as_str())
+                .unwrap_or("");
+            cookie.add_and_bucket_usage(
+                input,
+                output,
+                0,
+                0,
+                family,
+                model,
+                crate::config::UsageSource::Web,
+            );
             let cloned = cookie.clone();
             if let Err(err) = self.cookie_actor_handle.return_cookie(cloned, None).await {
                 warn!("Failed to persist usage statistics: {}", err);

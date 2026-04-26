@@ -144,7 +144,19 @@ impl ClaudeWebState {
                                 }
                             })
                             .unwrap_or(crate::config::ModelFamily::Other);
-                        c.add_and_bucket_usage(input_tokens, out, family);
+                        let model = last_params
+                            .as_ref()
+                            .map(|p| p.model.as_str())
+                            .unwrap_or("");
+                        c.add_and_bucket_usage(
+                            input_tokens,
+                            out,
+                            0,
+                            0,
+                            family,
+                            model,
+                            crate::config::UsageSource::Web,
+                        );
                         let _ = handle.return_cookie(c, None).await;
                     }
                 } else if let Some(mut c) = cookie.clone() {
@@ -163,7 +175,19 @@ impl ClaudeWebState {
                             }
                         })
                         .unwrap_or(crate::config::ModelFamily::Other);
-                    c.add_and_bucket_usage(input_tokens, 0, family);
+                    let model = last_params
+                        .as_ref()
+                        .map(|p| p.model.as_str())
+                        .unwrap_or("");
+                    c.add_and_bucket_usage(
+                        input_tokens,
+                        0,
+                        0,
+                        0,
+                        family,
+                        model,
+                        crate::config::UsageSource::Web,
+                    );
                     let _ = handle.return_cookie(c, None).await;
                 }
             };

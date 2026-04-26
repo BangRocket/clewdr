@@ -191,7 +191,9 @@ impl ClaudeCodeState {
                     {
                         self.persist_claude_1m_support(ch, true).await;
                     }
-                    return self.handle_success_response(response, model_family).await;
+                    return self
+                        .handle_success_response(response, model_family, &p.model)
+                        .await;
                 }
                 Err(err) => {
                     // Emit tengu_api_error
@@ -487,26 +489,44 @@ impl ClaudeCodeState {
         &mut self,
         response: wreq::Response,
         model_family: ModelFamily,
+        model: &str,
     ) -> Result<axum::response::Response, ClewdrError> {
         if !self.stream {
             let (resp, usage_pair) = Self::materialize_non_stream_response(response).await?;
             let (input, output) = usage_pair.unwrap_or((self.usage.input_tokens as u64, 0));
-            self.persist_usage_totals(input, output, model_family).await;
+            self.persist_usage_totals(input, output, model_family, model)
+                .await;
             Ok(resp)
         } else {
             // Stream pass-through while accumulating output token usage from message_delta events
-            return self.forward_stream_with_usage(response, model_family).await;
+            return self
+                .forward_stream_with_usage(response, model_family, model)
+                .await;
         }
     }
 
-    async fn persist_usage_totals(&mut self, input: u64, output: u64, family: ModelFamily) {
+    async fn persist_usage_totals(
+        &mut self,
+        input: u64,
+        output: u64,
+        family: ModelFamily,
+        model: &str,
+    ) {
         if input == 0 && output == 0 {
             return;
         }
         if let Some(cookie) = self.cookie.as_mut() {
             // Lazy boundary refresh if due, then reset period counters and start fresh
             Self::update_cookie_boundaries_if_due(cookie, &self.cookie_actor_handle).await;
-            cookie.add_and_bucket_usage(input, output, family);
+            cookie.add_and_bucket_usage(
+                input,
+                output,
+                0,
+                0,
+                family,
+                model,
+                crate::config::UsageSource::Code,
+            );
             let cloned = cookie.clone();
             if let Err(err) = self.cookie_actor_handle.return_cookie(cloned, None).await {
                 warn!("Failed to persist usage statistics: {}", err);
@@ -518,6 +538,7 @@ impl ClaudeCodeState {
         &mut self,
         response: wreq::Response,
         family: ModelFamily,
+        model: &str,
     ) -> Result<axum::response::Response, ClewdrError> {
         use std::sync::{
             Arc,
@@ -528,6 +549,7 @@ impl ClaudeCodeState {
         let output_sum = Arc::new(AtomicU64::new(0));
         let handle = self.cookie_actor_handle.clone();
         let cookie = self.cookie.clone();
+        let model_owned = model.to_string();
 
         let osum = output_sum.clone();
         let stream = response.bytes_stream().eventsource().map_ok(move |event| {
@@ -544,11 +566,20 @@ impl ClaudeCodeState {
                         if let (Some(cookie), handle) = (cookie.clone(), handle.clone()) {
                             let total_out = osum.load(Ordering::Relaxed);
                             let mut c = cookie.clone();
+                            let model_for_task = model_owned.clone();
                             tokio::spawn(async move {
                                 // Update period boundaries if needed, then accumulate
                                 ClaudeCodeState::update_cookie_boundaries_if_due(&mut c, &handle)
                                     .await;
-                                c.add_and_bucket_usage(input_tokens, total_out, family);
+                                c.add_and_bucket_usage(
+                                    input_tokens,
+                                    total_out,
+                                    0,
+                                    0,
+                                    family,
+                                    &model_for_task,
+                                    crate::config::UsageSource::Code,
+                                );
                                 let _ = handle.return_cookie(c, None).await;
                             });
                         }
