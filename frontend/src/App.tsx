@@ -9,6 +9,7 @@ import AuthGatekeeper from "./components/auth/AuthGatekeeper";
 import LogoutPanel from "./components/auth/LogoutPanel";
 import ClaudeTabs from "./components/claude";
 import ConfigTab from "./components/config";
+import UsageDashboard from "./components/usage/UsageDashboard";
 import StatusMessage from "./components/common/StatusMessage";
 import ErrorBoundary from "./components/common/ErrorBoundary";
 import { useAppContext } from "./context/AppContext";
@@ -49,6 +50,7 @@ function App() {
   // Define tabs for the authenticated user
   const tabs = [
     { id: "claude", label: t("tabs.claude"), color: "cyan" },
+    { id: "usage", label: t("tabs.usage"), color: "purple" },
     { id: "config", label: t("tabs.config"), color: "green" },
     { id: "token", label: t("tabs.auth"), color: "violet" },
   ];
@@ -69,6 +71,8 @@ function App() {
             <ErrorBoundary>
               {activeTab === "claude" ? (
                 <ClaudeTabs />
+              ) : activeTab === "usage" ? (
+                <UsageDashboard />
               ) : activeTab === "config" ? (
                 <ConfigTab />
               ) : (

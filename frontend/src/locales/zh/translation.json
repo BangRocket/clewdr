@@ -24,8 +24,34 @@
   },
   "tabs": {
     "claude": "Claude",
+    "usage": "用量",
     "config": "配置",
     "auth": "认证"
+  },
+  "usage": {
+    "title": "用量与费用",
+    "loading": "加载中...",
+    "lifetimeCost": "累计费用",
+    "lifetimeInputTokens": "输入令牌",
+    "lifetimeOutputTokens": "输出令牌",
+    "activeCookies": "活跃 Cookie",
+    "subtabs": {
+      "overview": "概览",
+      "by_cookie": "按 Cookie",
+      "graveyard": "墓地"
+    },
+    "overview": {
+      "placeholder": "概览即将推出",
+      "cookieCount": "个 Cookie"
+    },
+    "byCookie": {
+      "placeholder": "按 Cookie 细分即将推出"
+    },
+    "graveyard": {
+      "empty": "无死亡 Cookie",
+      "tokens": "令牌",
+      "died": "死亡时间"
+    }
   },
   "claudeTab": {
     "submit": "提交Cookie",

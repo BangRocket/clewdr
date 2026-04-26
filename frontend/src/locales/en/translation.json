@@ -24,8 +24,34 @@
   },
   "tabs": {
     "claude": "Claude",
+    "usage": "Usage",
     "config": "Config",
     "auth": "Auth"
+  },
+  "usage": {
+    "title": "Usage & Cost",
+    "loading": "Loading...",
+    "lifetimeCost": "Lifetime cost",
+    "lifetimeInputTokens": "Input tokens",
+    "lifetimeOutputTokens": "Output tokens",
+    "activeCookies": "Active cookies",
+    "subtabs": {
+      "overview": "Overview",
+      "by_cookie": "By cookie",
+      "graveyard": "Graveyard"
+    },
+    "overview": {
+      "placeholder": "Overview coming soon",
+      "cookieCount": "cookies tracked"
+    },
+    "byCookie": {
+      "placeholder": "Per-cookie breakdown coming soon"
+    },
+    "graveyard": {
+      "empty": "No dead cookies",
+      "tokens": "tokens",
+      "died": "Died"
+    }
   },
   "claudeTab": {
     "submit": "Submit Cookie",
