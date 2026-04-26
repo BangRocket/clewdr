@@ -39,6 +39,7 @@ impl PricingTable {
         })
     }
 
+    /// Compute USD cost. Argument order: model, input, output, cache_read, cache_create.
     pub fn cost(
         &self,
         model: &str,
@@ -48,6 +49,7 @@ impl PricingTable {
         cache_create: u64,
     ) -> f64 {
         let Some(p) = self.models.get(model) else {
+            tracing::warn!(model, "no pricing entry for model, reporting cost as 0");
             return 0.0;
         };
         (input as f64) * p.input_cost_per_token
