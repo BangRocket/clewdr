@@ -127,6 +127,22 @@ pub struct CookieStatus {
     pub weekly_sonnet_has_reset: Option<bool>,
     #[serde(default)]
     pub weekly_opus_has_reset: Option<bool>,
+
+    // Cost tracking (matches existing UsageBreakdown bucket structure)
+    #[serde(default)]
+    pub session_cost_usd: f64,
+    #[serde(default)]
+    pub weekly_cost_usd: f64,
+    #[serde(default)]
+    pub weekly_sonnet_cost_usd: f64,
+    #[serde(default)]
+    pub weekly_opus_cost_usd: f64,
+    #[serde(default)]
+    pub lifetime_cost_usd: f64,
+
+    /// Preserved usage snapshots from previous reset windows
+    #[serde(default)]
+    pub snapshots: Vec<crate::config::UsageSnapshot>,
 }
 
 impl PartialEq for CookieStatus {
@@ -188,6 +204,13 @@ impl CookieStatus {
             weekly_has_reset: None,
             weekly_sonnet_has_reset: None,
             weekly_opus_has_reset: None,
+
+            session_cost_usd: 0.0,
+            weekly_cost_usd: 0.0,
+            weekly_sonnet_cost_usd: 0.0,
+            weekly_opus_cost_usd: 0.0,
+            lifetime_cost_usd: 0.0,
+            snapshots: Vec::new(),
         })
     }
 
@@ -207,6 +230,10 @@ impl CookieStatus {
                 weekly_usage: UsageBreakdown::default(),
                 weekly_sonnet_usage: UsageBreakdown::default(),
                 weekly_opus_usage: UsageBreakdown::default(),
+                session_cost_usd: 0.0,
+                weekly_cost_usd: 0.0,
+                weekly_sonnet_cost_usd: 0.0,
+                weekly_opus_cost_usd: 0.0,
                 ..self
             };
         }
@@ -241,6 +268,10 @@ impl CookieStatus {
         self.weekly_usage = UsageBreakdown::default();
         self.weekly_sonnet_usage = UsageBreakdown::default();
         self.weekly_opus_usage = UsageBreakdown::default();
+        self.session_cost_usd = 0.0;
+        self.weekly_cost_usd = 0.0;
+        self.weekly_sonnet_cost_usd = 0.0;
+        self.weekly_opus_cost_usd = 0.0;
     }
 
     // ------------------------
@@ -384,6 +415,16 @@ impl CookieStatus {
             ModelFamily::Other => {}
         }
     }
+
+    /// SHA-256 first 16 hex chars of the cookie value. Stable, non-reversible.
+    /// Used as filename for the per-cookie history JSONL.
+    pub fn history_id(&self) -> String {
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(self.cookie.inner.as_bytes());
+        let hash = hasher.finalize();
+        hash[..8].iter().map(|b| format!("{:02x}", b)).collect()
+    }
 }
 
 impl Deref for ClewdrCookie {
@@ -493,5 +534,20 @@ mod tests {
     fn test_invalid_cookie() {
         let result = ClewdrCookie::from_str("invalid-cookie");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn history_id_is_stable_and_short() {
+        let base86 = make_base_cookie_with_len(86);
+        let c1 = CookieStatus::new(&base86, None).unwrap();
+        let id1 = c1.history_id();
+        let id2 = c1.history_id();
+        assert_eq!(id1, id2);
+        assert_eq!(id1.len(), 16);
+        assert!(id1.chars().all(|c| c.is_ascii_hexdigit()));
+        // Different cookies → different ids
+        let base87 = make_base_cookie_with_len(87);
+        let c2 = CookieStatus::new(&base87, None).unwrap();
+        assert_ne!(c1.history_id(), c2.history_id());
     }
 }
