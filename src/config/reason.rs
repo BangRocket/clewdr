@@ -50,6 +50,10 @@ impl Display for Reason {
 pub struct UselessCookie {
     pub cookie: ClewdrCookie,
     pub reason: Reason,
+    #[serde(default)]
+    pub final_snapshot: Option<crate::config::UsageSnapshot>,
+    #[serde(default)]
+    pub died_at: i64,
 }
 
 impl PartialEq<CookieStatus> for UselessCookie {
@@ -82,6 +86,20 @@ impl UselessCookie {
     /// # Returns
     /// A new UselessCookie instance
     pub fn new(cookie: ClewdrCookie, reason: Reason) -> Self {
-        Self { cookie, reason }
+        Self {
+            cookie,
+            reason,
+            final_snapshot: None,
+            died_at: chrono::Utc::now().timestamp(),
+        }
+    }
+
+    /// Attaches a final usage snapshot to this UselessCookie.
+    ///
+    /// Builder-style helper used when retiring a cookie so that its
+    /// last-known usage state is preserved alongside the death record.
+    pub fn with_final_snapshot(mut self, snapshot: crate::config::UsageSnapshot) -> Self {
+        self.final_snapshot = Some(snapshot);
+        self
     }
 }
