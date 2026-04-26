@@ -262,3 +262,162 @@ export async function postMultipleCookies(cookies: string[]) {
 
   return results;
 }
+
+// === Usage tracking endpoints (/api/usage/*) ===
+
+import type {
+  UsageSummary,
+  UsageEvent,
+  UsageSnapshot,
+  TimeBucket,
+  DeadCookieInfo,
+  PricingMeta,
+  PruneStats,
+} from "../types/usage.types";
+
+/**
+ * Builds the standard auth headers used by every /api/* endpoint that
+ * requires the bearer token (mirrors the pattern in the existing functions
+ * above: pull `authToken` from localStorage, send as `Bearer`, include
+ * `Content-Type: application/json`).
+ */
+function authHeaders(): HeadersInit {
+  const token = localStorage.getItem("authToken") || "";
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`,
+  };
+}
+
+/**
+ * GET /api/usage/summary — lifetime totals + per-cookie summary.
+ */
+export async function getUsageSummary(): Promise<UsageSummary> {
+  const response = await fetch("/api/usage/summary", {
+    method: "GET",
+    headers: authHeaders(),
+  });
+  if (!response.ok) {
+    throw new Error(`Error ${response.status}: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+/**
+ * GET /api/usage/cookie/:id/events — raw events for a single cookie.
+ *
+ * @param historyId The cookie's history_id (stable opaque identifier)
+ * @param opts Optional `from`/`to` (unix seconds) and `source` filter
+ */
+export async function getCookieEvents(
+  historyId: string,
+  opts?: { from?: number; to?: number; source?: "web" | "code" | "all" }
+): Promise<UsageEvent[]> {
+  const url = new URL(
+    `/api/usage/cookie/${encodeURIComponent(historyId)}/events`,
+    window.location.origin
+  );
+  if (opts?.from !== undefined) url.searchParams.set("from", String(opts.from));
+  if (opts?.to !== undefined) url.searchParams.set("to", String(opts.to));
+  if (opts?.source && opts.source !== "all") {
+    url.searchParams.set("source", opts.source);
+  }
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    headers: authHeaders(),
+  });
+  if (!response.ok) {
+    throw new Error(`Error ${response.status}: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+/**
+ * GET /api/usage/cookie/:id/timeseries — bucketed time-series for charting.
+ *
+ * @param historyId The cookie's history_id
+ * @param bucket "hour" or "day"
+ * @param opts Optional `from`/`to` (unix seconds)
+ */
+export async function getCookieTimeSeries(
+  historyId: string,
+  bucket: "hour" | "day",
+  opts?: { from?: number; to?: number }
+): Promise<TimeBucket[]> {
+  const url = new URL(
+    `/api/usage/cookie/${encodeURIComponent(historyId)}/timeseries`,
+    window.location.origin
+  );
+  url.searchParams.set("bucket", bucket);
+  if (opts?.from !== undefined) url.searchParams.set("from", String(opts.from));
+  if (opts?.to !== undefined) url.searchParams.set("to", String(opts.to));
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    headers: authHeaders(),
+  });
+  if (!response.ok) {
+    throw new Error(`Error ${response.status}: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+/**
+ * GET /api/usage/cookie/:id/snapshots — closed-period snapshots.
+ */
+export async function getCookieSnapshots(
+  historyId: string
+): Promise<UsageSnapshot[]> {
+  const response = await fetch(
+    `/api/usage/cookie/${encodeURIComponent(historyId)}/snapshots`,
+    {
+      method: "GET",
+      headers: authHeaders(),
+    }
+  );
+  if (!response.ok) {
+    throw new Error(`Error ${response.status}: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+/**
+ * GET /api/usage/dead — graveyard of dead cookies + final snapshots.
+ */
+export async function getDeadCookies(): Promise<DeadCookieInfo[]> {
+  const response = await fetch("/api/usage/dead", {
+    method: "GET",
+    headers: authHeaders(),
+  });
+  if (!response.ok) {
+    throw new Error(`Error ${response.status}: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+/**
+ * GET /api/usage/pricing — pricing source metadata (litellm vs fallback).
+ */
+export async function getPricingMeta(): Promise<PricingMeta> {
+  const response = await fetch("/api/usage/pricing", {
+    method: "GET",
+    headers: authHeaders(),
+  });
+  if (!response.ok) {
+    throw new Error(`Error ${response.status}: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+/**
+ * POST /api/usage/prune — manually trigger retention pruning.
+ */
+export async function pruneUsage(): Promise<PruneStats> {
+  const response = await fetch("/api/usage/prune", {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  if (!response.ok) {
+    throw new Error(`Error ${response.status}: ${response.statusText}`);
+  }
+  return response.json();
+}
