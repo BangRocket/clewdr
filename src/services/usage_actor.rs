@@ -2,8 +2,9 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use ractor::{Actor, ActorProcessingErr, ActorRef, RpcReplyPort};
+use ractor::{Actor, ActorProcessingErr, ActorRef, RactorErr, RpcReplyPort, rpc::CallResult};
 use serde::Serialize;
+use snafu::{GenerateImplicitData, Location};
 use tokio::fs::{self, OpenOptions};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
 use tracing::error;
@@ -401,6 +402,143 @@ async fn prune(dir: &Path) -> std::io::Result<PruneStats> {
     Ok(stats)
 }
 
+/// Typed handle wrapping an [`ActorRef<UsageActorMessage>`] so request-path
+/// callers don't have to construct messages by hand.
+#[derive(Clone)]
+pub struct UsageActorHandle {
+    actor_ref: ActorRef<UsageActorMessage>,
+}
+
+impl UsageActorHandle {
+    /// Wrap an existing [`ActorRef`].
+    pub fn new(actor_ref: ActorRef<UsageActorMessage>) -> Self {
+        Self { actor_ref }
+    }
+
+    /// Fire-and-forget record. Drops the event if the mailbox send fails
+    /// (which under normal operation should not happen — a closed mailbox
+    /// means the actor is dead).
+    pub fn try_record(&self, history_id: String, event: UsageEvent) {
+        if let Err(e) = self
+            .actor_ref
+            .cast(UsageActorMessage::Record { history_id, event })
+        {
+            tracing::debug!("usage record dropped: {}", e);
+        }
+    }
+
+    /// Fire-and-forget tombstone marker for a dying cookie.
+    pub fn tombstone(&self, history_id: String, snapshot: UsageSnapshot) {
+        if let Err(e) = self.actor_ref.cast(UsageActorMessage::Tombstone {
+            history_id,
+            snapshot,
+        }) {
+            tracing::debug!("usage tombstone dropped: {}", e);
+        }
+    }
+
+    /// Close the current period and obtain the resulting snapshot.
+    ///
+    /// `ractor::call!` only supports tuple-style enum variants; the usage
+    /// actor uses struct-style variants, so we drop down to
+    /// [`ActorRef::call`] directly and replicate the macro's
+    /// `CallResult` -> `Result` flattening.
+    pub async fn rollover(
+        &self,
+        history_id: String,
+        trigger: SnapshotTrigger,
+        usage: UsageBreakdown,
+        cost_usd: f64,
+        period_start: i64,
+    ) -> Result<UsageSnapshot, ClewdrError> {
+        let result = self
+            .actor_ref
+            .call(
+                |reply| UsageActorMessage::Rollover {
+                    history_id,
+                    trigger,
+                    usage,
+                    cost_usd,
+                    period_start,
+                    reply,
+                },
+                None,
+            )
+            .await
+            .map_err(RactorErr::from);
+        unwrap_call_result(result, "rollover")
+    }
+
+    /// Read events back from disk for the given history.
+    pub async fn query_events(
+        &self,
+        history_id: String,
+        from: Option<i64>,
+        to: Option<i64>,
+    ) -> Result<Vec<UsageEvent>, ClewdrError> {
+        let result = self
+            .actor_ref
+            .call(
+                |reply| UsageActorMessage::QueryEvents {
+                    history_id,
+                    from,
+                    to,
+                    reply,
+                },
+                None,
+            )
+            .await
+            .map_err(RactorErr::from);
+        unwrap_call_result(result, "query_events")
+    }
+
+    /// Drop the writer and remove the on-disk JSONL file.
+    pub async fn delete_history(&self, history_id: String) -> Result<(), ClewdrError> {
+        let result = self
+            .actor_ref
+            .call(
+                |reply| UsageActorMessage::DeleteHistory { history_id, reply },
+                None,
+            )
+            .await
+            .map_err(RactorErr::from);
+        // Inner reply is already a `Result<(), ClewdrError>`; flatten.
+        unwrap_call_result(result, "delete_history")?
+    }
+
+    /// Walk the history dir and prune events past the retention cutoff.
+    pub async fn prune_now(&self) -> Result<PruneStats, ClewdrError> {
+        let result = self
+            .actor_ref
+            .call(
+                |reply| UsageActorMessage::PruneNow { reply },
+                None,
+            )
+            .await
+            .map_err(RactorErr::from);
+        unwrap_call_result(result, "prune_now")
+    }
+}
+
+/// Collapse `Result<CallResult<T>, RactorErr<_>>` into `Result<T, ClewdrError>`,
+/// matching the error-mapping idiom used by `cookie_actor.rs`.
+fn unwrap_call_result<T: std::fmt::Debug, M>(
+    result: Result<CallResult<T>, RactorErr<M>>,
+    op: &'static str,
+) -> Result<T, ClewdrError> {
+    match result {
+        Ok(CallResult::Success(value)) => Ok(value),
+        Ok(other) => Err(ClewdrError::RactorError {
+            loc: Location::generate(),
+            msg: format!("UsageActor {op} call failed: {other:?}"),
+        }),
+        Err(e) => Err(ClewdrError::RactorError {
+            loc: Location::generate(),
+            msg: format!("Failed to communicate with UsageActor for {op} operation: {e}"),
+        }),
+    }
+}
+
 #[cfg(all(test, feature = "portable"))]
 mod tests {
     use super::*;
@@ -470,6 +608,40 @@ mod tests {
         let evs = read_events(&dir, "x", Some(100), Some(200)).await.unwrap();
         assert_eq!(evs.len(), 1);
         assert_eq!(evs[0].ts, 150);
+    }
+
+    #[tokio::test]
+    async fn handle_try_record_appends_via_actor() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().to_path_buf();
+        let (actor_ref, _join) = ractor::Actor::spawn(None, UsageActor, dir.clone())
+            .await
+            .expect("spawn actor");
+        let handle = UsageActorHandle::new(actor_ref.clone());
+        let event = UsageEvent {
+            ts: 1000,
+            source: crate::config::UsageSource::Web,
+            model: "claude-sonnet-4-5-20250929".into(),
+            family: crate::config::ModelFamily::Sonnet,
+            input_tokens: 100,
+            output_tokens: 50,
+            cache_read_tokens: 0,
+            cache_creation_tokens: 0,
+            cost_usd: 0.000003 * 100.0 + 0.000015 * 50.0,
+        };
+        handle.try_record("test_handle_id".into(), event.clone());
+        // `prune_now` flushes + drops all writers as a side effect (per the
+        // post-3.1 fix), giving us a deterministic way to force the buffer
+        // to disk before reading it back via `query_events`.
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        let _ = handle.prune_now().await.expect("prune_now");
+        let events = handle
+            .query_events("test_handle_id".into(), None, None)
+            .await
+            .expect("query");
+        assert_eq!(events.len(), 1, "expected 1 event, got {:?}", events);
+        assert_eq!(events[0].ts, 1000);
+        actor_ref.stop(None);
     }
 
     #[tokio::test]
