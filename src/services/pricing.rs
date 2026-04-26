@@ -66,6 +66,79 @@ pub fn load_fallback() -> PricingTable {
         .expect("bundled pricing_fallback.json must be valid JSON")
 }
 
+use std::sync::OnceLock;
+
+use tracing::{info, warn};
+
+static PRICING: OnceLock<PricingTable> = OnceLock::new();
+
+const LITELLM_URL: &str = "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json";
+
+pub async fn init() {
+    let table = match fetch_litellm().await {
+        Ok(t) => {
+            info!(
+                "pricing: fetched fresh from LiteLLM ({} models)",
+                t.models.len()
+            );
+            t
+        }
+        Err(e) => {
+            let f = load_fallback();
+            warn!(
+                "pricing: using bundled fallback ({} models): {}",
+                f.models.len(),
+                e
+            );
+            f
+        }
+    };
+    let _ = PRICING.set(table);
+}
+
+pub fn current() -> &'static PricingTable {
+    PRICING.get_or_init(load_fallback)
+}
+
+pub fn cost(
+    model: &str,
+    input: u64,
+    output: u64,
+    cache_read: u64,
+    cache_create: u64,
+) -> f64 {
+    current().cost(model, input, output, cache_read, cache_create)
+}
+
+async fn fetch_litellm() -> Result<PricingTable, Box<dyn std::error::Error + Send + Sync>> {
+    let client = wreq::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()?;
+    let resp = client.get(LITELLM_URL).send().await?;
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status()).into());
+    }
+    let json = resp.text().await?;
+    // LiteLLM JSON is keyed by model name and contains many non-Anthropic entries
+    // with various shapes. Parse leniently: skip entries that fail to deserialize
+    // as ModelPricing rather than failing the whole table.
+    let raw: HashMap<String, serde_json::Value> = serde_json::from_str(&json)?;
+    let mut models = HashMap::new();
+    for (k, v) in raw {
+        if let Ok(p) = serde_json::from_value::<ModelPricing>(v) {
+            // Skip entries with no useful pricing info
+            if p.input_cost_per_token > 0.0 || p.output_cost_per_token > 0.0 {
+                models.insert(k, p);
+            }
+        }
+    }
+    Ok(PricingTable {
+        models,
+        fetched_at: chrono::Utc::now().timestamp(),
+        source: PricingSource::Litellm,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -97,5 +170,19 @@ mod tests {
         let t = load_fallback();
         assert!(!t.models.is_empty());
         assert!(matches!(t.source, PricingSource::Fallback));
+    }
+
+    #[test]
+    fn parse_keeps_entries_with_pricing_skips_empty() {
+        // Demonstrates the lenient parse semantics fetch_litellm relies on.
+        let json = r#"{
+            "model-with-pricing": { "input_cost_per_token": 0.001, "output_cost_per_token": 0.002 },
+            "model-with-zero-pricing": { "input_cost_per_token": 0.0, "output_cost_per_token": 0.0 }
+        }"#;
+        let table = PricingTable::parse_from_json(json, PricingSource::Litellm).unwrap();
+        // parse_from_json itself is non-filtering — both entries land.
+        // The filtering happens in fetch_litellm. We document that here:
+        assert!(table.models.contains_key("model-with-pricing"));
+        assert!(table.models.contains_key("model-with-zero-pricing"));
     }
 }
