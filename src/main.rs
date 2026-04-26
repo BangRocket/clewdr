@@ -131,6 +131,9 @@ async fn main() -> Result<(), ClewdrError> {
         CLEWDR_CONFIG.load().claude_code_telemetry,
     );
 
+    // Initialize model pricing table (LiteLLM fetch with bundled fallback)
+    clewdr::services::pricing::init().await;
+
     // build axum router
     // create a TCP listener
     let addr = CLEWDR_CONFIG.load().address();
