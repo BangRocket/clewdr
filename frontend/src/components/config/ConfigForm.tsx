@@ -118,7 +118,7 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ config, onChange }) => {
             label={t("config.sections.api.maxRetries")}
           />
         </div>
-        <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+        <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
           <ConfigCheckbox
             name="preserve_chats"
             checked={config.preserve_chats}

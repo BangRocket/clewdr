@@ -48,7 +48,7 @@ const UsageDashboard: React.FC = () => {
   return (
     <div className="w-full space-y-4">
       {/* Summary cards row */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <SummaryCard
           label={t("usage.lifetimeCost")}
           value={`$${data.totals.lifetime_cost_usd.toFixed(2)}`}
