@@ -47,9 +47,24 @@ Streaming responses work on every endpoint.
 
 - `Dashboard` shows health, connected clients, and rate-limit status.
 - `Claude` tab stores browser cookies; paste `cookie: value` pairs and save.
+- `Usage` tab shows per-cookie token consumption and estimated USD cost (see below).
 - `Settings` lets you rotate the admin password, set upstream proxies, and reload config without restarting.
 
 If you forget the password, delete `clewdr.toml` and start the binary again. Docker users can mount a persistent folder for that file.
+
+## Usage & Cost Tracking
+
+ClewdR records every Claude request as a usage event with token counts and an estimated USD cost. The admin UI exposes a `Usage` tab with summary cards, time-series charts (cost + tokens), per-cookie sparklines + drill-down detail, and a Graveyard view of dead cookies with their final snapshot.
+
+- **Where data lives:** events stream to `history/<cookie-history-id>.jsonl` (one file per cookie, append-only). Rollover and death snapshots are persisted in `clewdr.toml` on the matching `CookieStatus` / `UselessCookie` entries, so the recent-window context survives a restart.
+- **How costs are computed:** at startup ClewdR fetches the current LiteLLM model price table; if the network is unavailable it falls back to a small bundled snapshot. Each event multiplies the model's input/output/cache rates by the request's token counts.
+- **Retention:** the new `history_event_retention_days` config knob (in `clewdr.toml`) bounds the on-disk JSONL log; snapshot marker lines and unparseable lines are always preserved. `history_snapshot_max_per_cookie` caps the in-memory rollover history per cookie.
+
+Sample event line in `history/<sha>.jsonl`:
+
+```json
+{"ts":1745625600,"source":"web","model":"claude-3-5-sonnet-20241022","family":"sonnet","input_tokens":1234,"output_tokens":567,"cache_read_tokens":0,"cache_creation_tokens":0,"cost_usd":0.012}
+```
 
 ## Configure Upstreams
 
