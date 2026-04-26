@@ -315,3 +315,69 @@ Viewports tested: 375 / 414 / 768 / 1024 / 1280 / 1920.
 - Re-audit with seeded data (>=1 valid cookie, >=1 dead cookie, real
   time-series buckets) and `zh` locale to verify items flagged
   `[empty-state]` and i18n overflow.
+
+## Phase 15 fixes applied 2026-04-26
+
+Re-capture pass: 2026-04-26 -- 54 PNGs in `screenshots/`. Spot-checked
+iphone-se config / iphone-se overview / ipad-portrait overview /
+desktop overview / iphone-pro-max config and confirmed each fix
+landed.
+
+### Touch targets (commit 84c2913)
+- [x] `ConfigCheckbox.tsx`: wrapping label now `min-h-[44px] py-2`,
+      visual checkbox bumped from `w-4 h-4` to `w-5 h-5` and
+      `flex-shrink-0` to keep size when the label wraps.
+- [x] `config/index.tsx:182`: Save Configuration button now has
+      `min-h-[44px]` (overrides the `py-2` shrink).
+- [x] `CookieUsageDetail.tsx:114,130`: bucket and source filter pills
+      bumped from `min-h-[36px]` to `min-h-[44px]`.
+
+### Layout (commit 022e575)
+- [x] `UsageDashboard.tsx:51`: summary cards switched from
+      `grid-cols-1 sm:grid-cols-2 lg:grid-cols-4` to
+      `grid-cols-2 lg:grid-cols-4`. Phones get 2x2 (~310px tall)
+      instead of 1x4 (~620px tall); ipad-portrait already had 2x2
+      and is unchanged; laptop / desktop get 4x1 at the existing
+      `lg` boundary.
+- [x] `config/index.tsx:176-187`: Configuration heading + Save
+      button now `flex-col gap-3 sm:flex-row sm:items-center
+      sm:justify-between` and the button is `w-full sm:w-auto`. No
+      more cramming on phones; desktop layout unchanged.
+- [x] `ConfigForm.tsx:121`: API Settings checkbox grid switched
+      from `grid-cols-2` (always) to `grid-cols-1 sm:grid-cols-2`.
+      Phones get a single readable column; tablets+/desktops keep
+      two columns.
+- [x] `Header.tsx`: split the multi-line `VERSION_INFO` on `\n` and
+      hide the metadata lines (`profile:`, `mode:`, `no_fs:`) below
+      `md`. Header `mb-10` reduced to `mb-6 sm:mb-10`. Version line
+      uses `text-xs sm:text-sm break-words` so the long author/email
+      line wraps on phones without spilling. Phones now show 2-3
+      lines of header instead of 4-5.
+
+### Empty state (commit a9ae0af)
+- [x] `CostLineChart.tsx`, `TokenBarChart.tsx`: added
+      `emptyHeight` prop (default 64). Empty placeholders now ~64px
+      tall instead of 240/220px. Verified: iphone-se overview
+      went from ~1100px tall total to ~700px tall; desktop overview
+      went from ~500px of empty rectangles to ~130px.
+
+### Outstanding (deferred to Phase 16)
+
+- [empty-state] Re-audit with seeded valid + dead cookies (no real
+  data was available at audit time, so populated densities for
+  `CookieVisualization`, `UsagePerCookie` sparklines, `Graveyard`
+  cards, and the cookie detail drawer charts cannot be confirmed
+  yet).
+- [zh-locale] Re-capture in `zh` locale; the audit script only
+  exercised the default `en` locale, and the top tab labels have
+  no `overflow-x-auto` fallback if they collide.
+- [layout, deferred] Non-usage tabs (`claude`, `config`, `token`)
+  still constrained to `md:max-w-xl` (~576px) on `lg`+. The audit
+  flagged this as "feels notably empty on desktop" but it's an
+  intentional design decision; revisit if the Config form gains
+  wider content (e.g. side-by-side panels).
+- [touch, deferred] CookieVisualization has small context-toggle
+  buttons (`px-3 py-1.5 text-xs`) and a small retry button on
+  config error states (`py-1 px-3`). These were flagged
+  `[populated state, static-analysis]` in the audit and only
+  surface in narrow paths; revisit during the seeded-state re-audit.
