@@ -12,5 +12,6 @@ static/
 .idea
 .codex
 test
-scripts
+/scripts
 AGENTS.md
+/screenshots/
