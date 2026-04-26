@@ -100,6 +100,10 @@
       "total": "累计用量",
       "resetsAt": "重置于 {{time}}"
     },
+    "lifetimeCost": "累计费用",
+    "finalCost": "最终费用",
+    "finalTokens": "最终令牌",
+    "diedAt": "死亡时间",
     "meta": {
       "summary": "查看详情"
     },

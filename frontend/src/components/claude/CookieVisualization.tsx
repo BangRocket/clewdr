@@ -254,6 +254,40 @@ const CookieVisualization: React.FC = () => {
     );
   };
 
+  const renderLifetimeCost = (status: CookieItem) => {
+    const cost = status.lifetime_cost_usd ?? 0;
+    if (cost <= 0) return null;
+    return (
+      <div className="text-xs text-gray-400">
+        {t("cookieStatus.lifetimeCost")}: ${cost.toFixed(2)}
+      </div>
+    );
+  };
+
+  const renderFinalSnapshot = (cookie: CookieItem) => {
+    const snap = cookie.final_snapshot;
+    if (!snap) return null;
+    const totalTokens =
+      (snap.usage.total_input_tokens ?? 0) +
+      (snap.usage.total_output_tokens ?? 0);
+    return (
+      <div className="mt-1 text-xs text-gray-400">
+        <div>
+          {t("cookieStatus.finalCost")}: ${snap.cost_usd.toFixed(2)}
+        </div>
+        <div>
+          {t("cookieStatus.finalTokens")}: {totalTokens.toLocaleString()}
+        </div>
+        {cookie.died_at && (
+          <div>
+            {t("cookieStatus.diedAt")}:{" "}
+            {new Date(cookie.died_at * 1000).toLocaleString()}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderQuotaStats = (status: CookieItem) => {
     const sess = status.session_utilization;
     const seven = status.seven_day_utilization;
@@ -594,7 +628,9 @@ const CookieVisualization: React.FC = () => {
             const contextControls = renderContextControls(status);
             const usageStats = renderUsageStats(status);
             const quotaStats = renderQuotaStats(status);
-            const hasMeta = contextControls || usageStats || quotaStats;
+            const lifetimeCost = renderLifetimeCost(status);
+            const hasMeta =
+              contextControls || usageStats || quotaStats || lifetimeCost;
             return (
               <div
                 key={index}
@@ -610,6 +646,7 @@ const CookieVisualization: React.FC = () => {
                       <div className="mt-2 space-y-2">
                         {contextControls}
                         {usageStats}
+                        {lifetimeCost}
                         {quotaStats}
                       </div>
                     </details>
@@ -639,7 +676,9 @@ const CookieVisualization: React.FC = () => {
             const contextControls = renderContextControls(status);
             const usageStats = renderUsageStats(status);
             const quotaStats = renderQuotaStats(status);
-            const hasMeta = contextControls || usageStats || quotaStats;
+            const lifetimeCost = renderLifetimeCost(status);
+            const hasMeta =
+              contextControls || usageStats || quotaStats || lifetimeCost;
             return (
               <div
                 key={index}
@@ -655,6 +694,7 @@ const CookieVisualization: React.FC = () => {
                       <div className="mt-2 space-y-2">
                         {contextControls}
                         {usageStats}
+                        {lifetimeCost}
                         {quotaStats}
                       </div>
                     </details>
@@ -694,6 +734,8 @@ const CookieVisualization: React.FC = () => {
                 <div className="text-red-300 flex-grow mr-4 min-w-0 mb-1 sm:mb-0">
                   <CookieValue cookie={status.cookie} />
                   {renderUsageStats(status)}
+                  {renderLifetimeCost(status)}
+                  {renderFinalSnapshot(status)}
                 </div>
                 <div className="flex items-center">
                   <span className="text-gray-400">

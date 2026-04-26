@@ -1,4 +1,6 @@
 // frontend/src/types/cookie.types.ts
+import type { UsageSnapshot } from "./usage.types";
+
 export interface UsageBreakdown {
   total_input_tokens?: number;
   total_output_tokens?: number;
@@ -30,11 +32,22 @@ export interface CookieStatus {
   seven_day_resets_at?: string | null;
   seven_day_opus_resets_at?: string | null;
   seven_day_sonnet_resets_at?: string | null;
+  // Per-bucket cost totals (USD), attached by /api/cookies only
+  session_cost_usd?: number;
+  weekly_cost_usd?: number;
+  weekly_sonnet_cost_usd?: number;
+  weekly_opus_cost_usd?: number;
+  lifetime_cost_usd?: number;
+  // Opaque pass-through; not consumed in this UI
+  snapshots?: unknown[];
 }
 
 export interface UselessCookie {
   cookie: string;
   reason: unknown;
+  // Final snapshot captured at death; surfaced in the graveyard preview.
+  final_snapshot?: UsageSnapshot | null;
+  died_at?: number;
 }
 
 export interface CookieStatusInfo {
@@ -45,6 +58,8 @@ export interface CookieStatusInfo {
 
 export type CookieItem = Partial<CookieStatus> & Pick<CookieStatus, "cookie"> & {
   reason?: unknown;
+  final_snapshot?: UsageSnapshot | null;
+  died_at?: number;
 };
 
 export interface CookieFormState {
