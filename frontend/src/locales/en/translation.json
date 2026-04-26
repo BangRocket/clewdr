@@ -46,7 +46,35 @@
       "tokensOverTime": "Tokens over time"
     },
     "byCookie": {
-      "placeholder": "Per-cookie breakdown coming soon"
+      "empty": "No cookies tracked",
+      "lifetime": "lifetime",
+      "snapshots": "snapshots"
+    },
+    "detail": {
+      "title": "Cookie usage",
+      "close": "Close",
+      "bucket": "Bucket",
+      "bucketOption": {
+        "hour": "Hour",
+        "day": "Day"
+      },
+      "source": "Source",
+      "sourceOption": {
+        "all": "All",
+        "web": "Web",
+        "code": "Code"
+      },
+      "cost": "Cost over time",
+      "tokens": "Tokens over time",
+      "snapshots": "Snapshots",
+      "noSnapshots": "No snapshots yet",
+      "trigger": {
+        "session_reset": "Session reset",
+        "weekly_reset": "Weekly reset",
+        "weekly_sonnet_reset": "Weekly Sonnet reset",
+        "weekly_opus_reset": "Weekly Opus reset",
+        "death": "Death"
+      }
     },
     "graveyard": {
       "empty": "No dead cookies",

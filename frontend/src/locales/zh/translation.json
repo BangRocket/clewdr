@@ -46,7 +46,35 @@
       "tokensOverTime": "令牌趋势"
     },
     "byCookie": {
-      "placeholder": "按 Cookie 细分即将推出"
+      "empty": "无 Cookie 记录",
+      "lifetime": "累计",
+      "snapshots": "快照"
+    },
+    "detail": {
+      "title": "Cookie 用量",
+      "close": "关闭",
+      "bucket": "粒度",
+      "bucketOption": {
+        "hour": "小时",
+        "day": "天"
+      },
+      "source": "来源",
+      "sourceOption": {
+        "all": "全部",
+        "web": "Web",
+        "code": "Code"
+      },
+      "cost": "费用趋势",
+      "tokens": "令牌趋势",
+      "snapshots": "快照",
+      "noSnapshots": "尚无快照",
+      "trigger": {
+        "session_reset": "会话重置",
+        "weekly_reset": "每周重置",
+        "weekly_sonnet_reset": "每周 Sonnet 重置",
+        "weekly_opus_reset": "每周 Opus 重置",
+        "death": "死亡"
+      }
     },
     "graveyard": {
       "empty": "无死亡 Cookie",
