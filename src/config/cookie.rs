@@ -224,6 +224,7 @@ impl CookieStatus {
             && t < chrono::Utc::now().timestamp()
         {
             info!("Cookie reset time expired");
+            // lifetime_cost_usd and snapshots intentionally preserved across resets
             return Self {
                 reset_time: None,
                 session_usage: UsageBreakdown::default(),
@@ -423,7 +424,7 @@ impl CookieStatus {
         let mut hasher = Sha256::new();
         hasher.update(self.cookie.inner.as_bytes());
         let hash = hasher.finalize();
-        hash[..8].iter().map(|b| format!("{:02x}", b)).collect()
+        hex::encode(&hash[..8])
     }
 }
 
