@@ -68,9 +68,7 @@ pub struct PruneStats {
 }
 
 /// Actor managing per-cookie usage event JSONL files.
-pub struct UsageActor {
-    pub history_dir: PathBuf,
-}
+pub struct UsageActor;
 
 /// Mutable per-actor state.
 pub struct UsageActorState {
@@ -153,6 +151,12 @@ impl Actor for UsageActor {
                 period_start,
                 reply,
             } => {
+                // Flush before counting so the on-disk read sees all buffered events.
+                if let Some(w) = state.open_writers.get_mut(&history_id) {
+                    if let Err(e) = w.flush().await {
+                        error!("rollover pre-flush for {}: {}", history_id, e);
+                    }
+                }
                 let event_count =
                     count_events_since(&state.history_dir, &history_id, period_start)
                         .await
@@ -166,7 +170,7 @@ impl Actor for UsageActor {
                     event_count,
                 };
                 if let Err(e) = append_marker(state, &history_id, &snapshot).await {
-                    error!("usage rollover marker failed for {}: {}", history_id, e);
+                    error!("rollover marker append for {}: {}", history_id, e);
                 }
                 reply.send(snapshot)?;
             }
@@ -175,11 +179,15 @@ impl Actor for UsageActor {
                 snapshot,
             } => {
                 if let Err(e) = append_marker(state, &history_id, &snapshot).await {
-                    error!("usage tombstone marker failed for {}: {}", history_id, e);
+                    error!("tombstone marker append for {}: {}", history_id, e);
                 }
                 if let Some(mut w) = state.open_writers.remove(&history_id) {
                     if let Err(e) = w.flush().await {
-                        error!("usage tombstone flush failed for {}: {}", history_id, e);
+                        error!("tombstone flush for {}: {}", history_id, e);
+                    }
+                    match w.into_inner().sync_all().await {
+                        Ok(()) => {}
+                        Err(e) => error!("tombstone sync_all for {}: {}", history_id, e),
                     }
                 }
             }
@@ -199,10 +207,22 @@ impl Actor for UsageActor {
                 reply.send(result)?;
             }
             UsageActorMessage::PruneNow { reply } => {
-                let stats = prune(&state.history_dir).await.unwrap_or_else(|e| {
-                    error!("usage prune failed: {}", e);
-                    PruneStats::default()
-                });
+                // Flush + drop all writers BEFORE prune renames files — otherwise
+                // open FDs would orphan to the pre-rename inode and silently lose
+                // subsequent writes.
+                for w in state.open_writers.values_mut() {
+                    if let Err(e) = w.flush().await {
+                        error!("pre-prune flush failed: {}", e);
+                    }
+                }
+                state.open_writers.clear();
+                let stats = match prune(&state.history_dir).await {
+                    Ok(s) => s,
+                    Err(e) => {
+                        error!("prune failed: {}", e);
+                        PruneStats::default()
+                    }
+                };
                 reply.send(stats)?;
             }
         }
