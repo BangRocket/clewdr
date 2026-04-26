@@ -105,7 +105,22 @@ impl RouterBuilder {
         let admin_router = Router::new()
             .route("/auth", get(api_auth))
             .route("/config", get(api_get_config).post(api_post_config))
-            .route("/usage/summary", get(usage::summary));
+            .route("/usage/summary", get(usage::summary))
+            .route(
+                "/usage/cookie/{history_id}/events",
+                get(usage::events),
+            )
+            .route(
+                "/usage/cookie/{history_id}/timeseries",
+                get(usage::timeseries),
+            )
+            .route(
+                "/usage/cookie/{history_id}/snapshots",
+                get(usage::snapshots),
+            )
+            .route("/usage/dead", get(usage::dead))
+            .route("/usage/pricing", get(usage::pricing_meta))
+            .route("/usage/prune", post(usage::prune_now));
         let router = Router::new()
             .nest(
                 "/api",
