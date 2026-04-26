@@ -15,6 +15,9 @@ import type { TimeBucket } from "../../../types/usage.types";
 interface Props {
   data: TimeBucket[];
   height?: number;
+  /** Height to render when data is empty. Defaults to 64 so empty
+   * placeholders don't waste hundreds of pixels of vertical space. */
+  emptyHeight?: number;
 }
 
 const fmtTs = (ts: number) =>
@@ -30,11 +33,11 @@ const fmtTokens = (v: number) =>
     ? `${(v / 1_000).toFixed(1)}k`
     : String(v);
 
-const TokenBarChart: React.FC<Props> = ({ data, height = 240 }) => {
+const TokenBarChart: React.FC<Props> = ({ data, height = 240, emptyHeight = 64 }) => {
   if (data.length === 0) {
     return (
       <div
-        style={{ height }}
+        style={{ height: emptyHeight }}
         className="flex items-center justify-center text-sm text-gray-500"
       >
         No data
