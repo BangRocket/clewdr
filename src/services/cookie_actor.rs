@@ -90,18 +90,42 @@ impl CookieActor {
         );
     }
 
-    /// Checks and resets cookies that have passed their reset time
-    fn reset(state: &mut CookieActorState) {
+    /// Checks and resets cookies that have passed their reset time.
+    /// Captures session-reset snapshots via UsageActor before wiping buckets.
+    async fn reset(state: &mut CookieActorState) {
         let mut reset_cookies = Vec::new();
-        state.exhausted.retain(|cookie| {
-            let reset_cookie = cookie.clone().reset();
+        let mut still_exhausted = HashSet::with_capacity(state.exhausted.len());
+        for cookie in state.exhausted.drain() {
+            let (mut reset_cookie, pending) = cookie.reset_with_rollover();
             if reset_cookie.reset_time.is_none() {
+                if !pending.is_empty()
+                    && let Some(actor) = crate::services::usage_actor::USAGE_ACTOR.get()
+                {
+                    let history_id = reset_cookie.history_id();
+                    for p in pending {
+                        match actor
+                            .rollover(
+                                history_id.clone(),
+                                p.trigger,
+                                p.usage,
+                                p.cost_usd,
+                                p.period_start,
+                            )
+                            .await
+                        {
+                            Ok(snap) => reset_cookie.snapshots.push(snap),
+                            Err(e) => {
+                                error!("rollover failed for {}: {}", history_id, e);
+                            }
+                        }
+                    }
+                }
                 reset_cookies.push(reset_cookie);
-                false
             } else {
-                true
+                still_exhausted.insert(reset_cookie);
             }
-        });
+        }
+        state.exhausted = still_exhausted;
         if reset_cookies.is_empty() {
             return;
         }
@@ -182,12 +206,12 @@ impl CookieActor {
     }
 
     /// Dispatches a cookie for use
-    fn dispatch(
+    async fn dispatch(
         &self,
         state: &mut CookieActorState,
         hash: Option<u64>,
     ) -> Result<CookieStatus, ClewdrError> {
-        Self::reset(state);
+        Self::reset(state).await;
         if let Some(hash) = hash
             && let Some(cookie) = state.moka.get(&hash)
             && let Some(cookie) = state.valid.iter().find(|&c| c == &cookie)
@@ -423,10 +447,10 @@ impl Actor for CookieActor {
                 if changed {
                     Self::save(state);
                 }
-                Self::reset(state);
+                Self::reset(state).await;
             }
             CookieActorMessage::Request(cache_hash, reply_port) => {
-                let result = self.dispatch(state, cache_hash);
+                let result = self.dispatch(state, cache_hash).await;
                 reply_port.send(result)?;
             }
             CookieActorMessage::GetStatus(reply_port) => {

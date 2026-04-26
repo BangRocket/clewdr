@@ -51,6 +51,17 @@ pub struct UsageBreakdown {
     pub opus_output_tokens: u64,
 }
 
+/// A rollover that the caller (in async context) should drive to UsageActor.
+/// Returned alongside a reset CookieStatus so the actor call can be made
+/// and the resulting UsageSnapshot pushed back into `cookie.snapshots`.
+#[derive(Debug, Clone)]
+pub struct PendingRollover {
+    pub trigger: crate::config::SnapshotTrigger,
+    pub usage: UsageBreakdown,
+    pub cost_usd: f64,
+    pub period_start: i64,
+}
+
 /// A struct representing a cookie
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ClewdrCookie {
@@ -239,6 +250,30 @@ impl CookieStatus {
             };
         }
         self
+    }
+
+    /// Like [`reset`] but, if the session reset_time has elapsed, returns a
+    /// `PendingRollover` describing the data that was about to be wiped.
+    /// The caller is responsible for driving the rollover via
+    /// `UsageActorHandle::rollover` and pushing the returned snapshot into
+    /// `self.snapshots`.
+    pub fn reset_with_rollover(self) -> (Self, Vec<PendingRollover>) {
+        let mut pending = Vec::new();
+        if let Some(t) = self.reset_time
+            && t < chrono::Utc::now().timestamp()
+        {
+            let period_start = self
+                .session_resets_at
+                .map(|x| x.saturating_sub(5 * 60 * 60))
+                .unwrap_or_else(|| t.saturating_sub(5 * 60 * 60));
+            pending.push(PendingRollover {
+                trigger: crate::config::SnapshotTrigger::SessionReset,
+                usage: self.session_usage.clone(),
+                cost_usd: self.session_cost_usd,
+                period_start,
+            });
+        }
+        (self.reset(), pending)
     }
 
     pub fn add_token(&mut self, token: TokenInfo) {
@@ -588,5 +623,31 @@ mod tests {
         let base87 = make_base_cookie_with_len(87);
         let c2 = CookieStatus::new(&base87, None).unwrap();
         assert_ne!(c1.history_id(), c2.history_id());
+    }
+
+    #[test]
+    fn reset_with_rollover_emits_pending_when_reset_time_elapsed() {
+        let mut c = CookieStatus::new(&make_base_cookie_with_len(86), Some(0)).unwrap();
+        c.reset_time = Some(1);
+        c.session_usage.total_input_tokens = 100;
+        c.session_cost_usd = 0.005;
+        let (c2, pending) = c.reset_with_rollover();
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].usage.total_input_tokens, 100);
+        assert!((pending[0].cost_usd - 0.005).abs() < 1e-9);
+        assert_eq!(c2.session_usage.total_input_tokens, 0);
+        assert_eq!(c2.session_cost_usd, 0.0);
+        assert!(c2.reset_time.is_none());
+    }
+
+    #[test]
+    fn reset_with_rollover_no_pending_when_reset_time_in_future() {
+        let mut c = CookieStatus::new(&make_base_cookie_with_len(86), None).unwrap();
+        c.reset_time = Some(chrono::Utc::now().timestamp() + 3600);
+        c.session_cost_usd = 0.005;
+        let (c2, pending) = c.reset_with_rollover();
+        assert!(pending.is_empty());
+        assert!((c2.session_cost_usd - 0.005).abs() < 1e-9);
+        assert!(c2.reset_time.is_some());
     }
 }
