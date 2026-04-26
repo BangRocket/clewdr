@@ -320,23 +320,47 @@ impl CookieActor {
             }
             Reason::Free => {
                 find_remove(&cookie);
+                let final_snapshot = crate::config::UsageSnapshot {
+                    closed_at: chrono::Utc::now().timestamp(),
+                    trigger: crate::config::SnapshotTrigger::Death {
+                        reason: reason.clone(),
+                    },
+                    period_start: 0,
+                    usage: cookie.lifetime_usage.clone(),
+                    cost_usd: cookie.lifetime_cost_usd,
+                    event_count: 0,
+                };
+                if let Some(actor) = crate::services::usage_actor::USAGE_ACTOR.get() {
+                    actor.tombstone(cookie.history_id(), final_snapshot.clone());
+                }
                 let mut removed = cookie.clone();
                 removed.reset_window_usage();
-                if !state
-                    .invalid
-                    .insert(UselessCookie::new(removed.cookie.clone(), reason))
-                {
+                let useless = UselessCookie::new(removed.cookie.clone(), reason)
+                    .with_final_snapshot(final_snapshot);
+                if !state.invalid.insert(useless) {
                     return;
                 }
             }
             _ => {
                 find_remove(&cookie);
+                let final_snapshot = crate::config::UsageSnapshot {
+                    closed_at: chrono::Utc::now().timestamp(),
+                    trigger: crate::config::SnapshotTrigger::Death {
+                        reason: reason.clone(),
+                    },
+                    period_start: 0,
+                    usage: cookie.lifetime_usage.clone(),
+                    cost_usd: cookie.lifetime_cost_usd,
+                    event_count: 0,
+                };
+                if let Some(actor) = crate::services::usage_actor::USAGE_ACTOR.get() {
+                    actor.tombstone(cookie.history_id(), final_snapshot.clone());
+                }
                 let mut removed = cookie.clone();
                 removed.reset_window_usage();
-                if !state
-                    .invalid
-                    .insert(UselessCookie::new(removed.cookie.clone(), reason))
-                {
+                let useless = UselessCookie::new(removed.cookie.clone(), reason)
+                    .with_final_snapshot(final_snapshot);
+                if !state.invalid.insert(useless) {
                     return;
                 }
             }
