@@ -102,4 +102,15 @@ impl UselessCookie {
         self.final_snapshot = Some(snapshot);
         self
     }
+
+    /// SHA-256 first 16 hex chars of the cookie value. Stable, non-reversible.
+    /// Mirrors `CookieStatus::history_id` so dead-cookie records can be
+    /// correlated with their pre-death history files.
+    pub fn history_id(&self) -> String {
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(self.cookie.as_bytes());
+        let hash = hasher.finalize();
+        hex::encode(&hash[..8])
+    }
 }
