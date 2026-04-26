@@ -51,6 +51,10 @@ pub struct UsageBreakdown {
     pub opus_output_tokens: u64,
 }
 
+/// Window length constants matching the periods tracked on `CookieStatus`.
+pub const SESSION_WINDOW_SECS: i64 = 5 * 60 * 60; // 5h
+pub const WEEKLY_WINDOW_SECS: i64 = 7 * 24 * 60 * 60; // 7d
+
 /// A rollover that the caller (in async context) should drive to UsageActor.
 /// Returned alongside a reset CookieStatus so the actor call can be made
 /// and the resulting UsageSnapshot pushed back into `cookie.snapshots`.
@@ -264,8 +268,8 @@ impl CookieStatus {
         {
             let period_start = self
                 .session_resets_at
-                .map(|x| x.saturating_sub(5 * 60 * 60))
-                .unwrap_or_else(|| t.saturating_sub(5 * 60 * 60));
+                .map(|x| x.saturating_sub(SESSION_WINDOW_SECS))
+                .unwrap_or_else(|| t.saturating_sub(SESSION_WINDOW_SECS));
             pending.push(PendingRollover {
                 trigger: crate::config::SnapshotTrigger::SessionReset,
                 usage: self.session_usage.clone(),
@@ -274,6 +278,80 @@ impl CookieStatus {
             });
         }
         (self.reset(), pending)
+    }
+
+    /// Walk all four reset windows. For each elapsed (`now >= *_resets_at`)
+    /// and tracked (`*_has_reset == Some(true)`, plus `*_resets_at.is_some()`
+    /// for the session window) bucket, emit a [`PendingRollover`] and zero
+    /// the in-memory usage + cost so subsequent requests start fresh.
+    ///
+    /// Boundaries (`*_resets_at`) are intentionally left untouched here —
+    /// callers are responsible for rolling them forward (either from a
+    /// server probe or by adding the window length).
+    pub fn clear_due_period_buckets_with_rollover(&mut self, now: i64) -> Vec<PendingRollover> {
+        let mut pending = Vec::new();
+
+        // Session
+        if self.session_has_reset == Some(true)
+            && let Some(ts) = self.session_resets_at
+            && now >= ts
+        {
+            pending.push(PendingRollover {
+                trigger: crate::config::SnapshotTrigger::SessionReset,
+                usage: self.session_usage.clone(),
+                cost_usd: self.session_cost_usd,
+                period_start: ts.saturating_sub(SESSION_WINDOW_SECS),
+            });
+            self.session_usage = UsageBreakdown::default();
+            self.session_cost_usd = 0.0;
+        }
+
+        // Weekly (combined)
+        if self.weekly_has_reset == Some(true)
+            && let Some(ts) = self.weekly_resets_at
+            && now >= ts
+        {
+            pending.push(PendingRollover {
+                trigger: crate::config::SnapshotTrigger::WeeklyReset,
+                usage: self.weekly_usage.clone(),
+                cost_usd: self.weekly_cost_usd,
+                period_start: ts.saturating_sub(WEEKLY_WINDOW_SECS),
+            });
+            self.weekly_usage = UsageBreakdown::default();
+            self.weekly_cost_usd = 0.0;
+        }
+
+        // Weekly Sonnet
+        if self.weekly_sonnet_has_reset == Some(true)
+            && let Some(ts) = self.weekly_sonnet_resets_at
+            && now >= ts
+        {
+            pending.push(PendingRollover {
+                trigger: crate::config::SnapshotTrigger::WeeklySonnetReset,
+                usage: self.weekly_sonnet_usage.clone(),
+                cost_usd: self.weekly_sonnet_cost_usd,
+                period_start: ts.saturating_sub(WEEKLY_WINDOW_SECS),
+            });
+            self.weekly_sonnet_usage = UsageBreakdown::default();
+            self.weekly_sonnet_cost_usd = 0.0;
+        }
+
+        // Weekly Opus
+        if self.weekly_opus_has_reset == Some(true)
+            && let Some(ts) = self.weekly_opus_resets_at
+            && now >= ts
+        {
+            pending.push(PendingRollover {
+                trigger: crate::config::SnapshotTrigger::WeeklyOpusReset,
+                usage: self.weekly_opus_usage.clone(),
+                cost_usd: self.weekly_opus_cost_usd,
+                period_start: ts.saturating_sub(WEEKLY_WINDOW_SECS),
+            });
+            self.weekly_opus_usage = UsageBreakdown::default();
+            self.weekly_opus_cost_usd = 0.0;
+        }
+
+        pending
     }
 
     pub fn add_token(&mut self, token: TokenInfo) {
@@ -649,5 +727,37 @@ mod tests {
         assert!(pending.is_empty());
         assert!((c2.session_cost_usd - 0.005).abs() < 1e-9);
         assert!(c2.reset_time.is_some());
+    }
+
+    #[test]
+    fn clear_due_period_buckets_emits_pending_for_elapsed_weekly() {
+        let mut c = CookieStatus::new(&make_base_cookie_with_len(86), None).unwrap();
+        c.weekly_has_reset = Some(true);
+        c.weekly_resets_at = Some(100);  // in the past
+        c.weekly_usage.total_input_tokens = 500;
+        c.weekly_cost_usd = 0.05;
+        let pending = c.clear_due_period_buckets_with_rollover(1000);
+        assert!(pending.iter().any(|p| matches!(p.trigger, crate::config::SnapshotTrigger::WeeklyReset)));
+        let weekly_pending = pending.iter().find(|p| matches!(p.trigger, crate::config::SnapshotTrigger::WeeklyReset)).unwrap();
+        assert_eq!(weekly_pending.usage.total_input_tokens, 500);
+        assert!((weekly_pending.cost_usd - 0.05).abs() < 1e-9);
+        // Bucket and cost should be zeroed
+        assert_eq!(c.weekly_usage.total_input_tokens, 0);
+        assert_eq!(c.weekly_cost_usd, 0.0);
+        // boundaries NOT updated
+        assert_eq!(c.weekly_resets_at, Some(100));
+    }
+
+    #[test]
+    fn clear_due_period_buckets_no_pending_when_not_elapsed() {
+        let mut c = CookieStatus::new(&make_base_cookie_with_len(86), None).unwrap();
+        c.weekly_has_reset = Some(true);
+        c.weekly_resets_at = Some(2000);  // in the future
+        c.weekly_cost_usd = 0.05;
+        let pending = c.clear_due_period_buckets_with_rollover(1000);
+        // Pending may exist for unrelated windows but NOT WeeklyReset
+        assert!(!pending.iter().any(|p| matches!(p.trigger, crate::config::SnapshotTrigger::WeeklyReset)));
+        // Cost preserved
+        assert!((c.weekly_cost_usd - 0.05).abs() < 1e-9);
     }
 }

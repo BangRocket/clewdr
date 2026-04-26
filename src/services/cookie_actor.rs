@@ -138,7 +138,9 @@ impl CookieActor {
 
     /// Reset in-memory usage buckets when local reset boundaries have elapsed.
     /// This avoids stale counters when cooldown windows expire between requests.
-    fn refresh_usage_windows(state: &mut CookieActorState) -> bool {
+    /// Before wiping, captures any due buckets via UsageActor rollover so the
+    /// resulting snapshots are pushed back into `cookie.snapshots`.
+    async fn refresh_usage_windows(state: &mut CookieActorState) -> bool {
         fn reset_if_due(
             has_reset: Option<bool>,
             resets_at: &mut Option<i64>,
@@ -154,49 +156,102 @@ impl CookieActor {
             false
         }
 
+        async fn drive_pending(cookie: &mut CookieStatus, now: i64) -> bool {
+            let pending = cookie.clear_due_period_buckets_with_rollover(now);
+            if pending.is_empty() {
+                return false;
+            }
+            if let Some(actor) = crate::services::usage_actor::USAGE_ACTOR.get() {
+                let history_id = cookie.history_id();
+                for p in pending {
+                    match actor
+                        .rollover(
+                            history_id.clone(),
+                            p.trigger,
+                            p.usage,
+                            p.cost_usd,
+                            p.period_start,
+                        )
+                        .await
+                    {
+                        Ok(snap) => cookie.snapshots.push(snap),
+                        Err(e) => {
+                            error!("rollover failed for {}: {}", history_id, e);
+                        }
+                    }
+                }
+            }
+            true
+        }
+
         let now = Utc::now().timestamp();
         let mut changed = false;
 
-        let apply_resets = |cookie: &mut CookieStatus| {
-            let mut cookie_changed = reset_if_due(
+        for cookie in state.valid.iter_mut() {
+            // Capture & roll over any elapsed buckets before advancing boundaries.
+            changed |= drive_pending(cookie, now).await;
+            changed |= reset_if_due(
                 cookie.session_has_reset,
                 &mut cookie.session_resets_at,
                 &mut cookie.session_usage,
                 SESSION_WINDOW_SECS,
                 now,
             );
-            cookie_changed |= reset_if_due(
+            changed |= reset_if_due(
                 cookie.weekly_has_reset,
                 &mut cookie.weekly_resets_at,
                 &mut cookie.weekly_usage,
                 WEEKLY_WINDOW_SECS,
                 now,
             );
-            cookie_changed |= reset_if_due(
+            changed |= reset_if_due(
                 cookie.weekly_sonnet_has_reset,
                 &mut cookie.weekly_sonnet_resets_at,
                 &mut cookie.weekly_sonnet_usage,
                 WEEKLY_WINDOW_SECS,
                 now,
             );
-            cookie_changed |= reset_if_due(
+            changed |= reset_if_due(
                 cookie.weekly_opus_has_reset,
                 &mut cookie.weekly_opus_resets_at,
                 &mut cookie.weekly_opus_usage,
                 WEEKLY_WINDOW_SECS,
                 now,
             );
-            cookie_changed
-        };
-
-        for cookie in state.valid.iter_mut() {
-            changed |= apply_resets(cookie);
         }
 
         if !state.exhausted.is_empty() {
             let mut new_exhausted = HashSet::with_capacity(state.exhausted.len());
             for mut cookie in state.exhausted.drain() {
-                changed |= apply_resets(&mut cookie);
+                changed |= drive_pending(&mut cookie, now).await;
+                changed |= reset_if_due(
+                    cookie.session_has_reset,
+                    &mut cookie.session_resets_at,
+                    &mut cookie.session_usage,
+                    SESSION_WINDOW_SECS,
+                    now,
+                );
+                changed |= reset_if_due(
+                    cookie.weekly_has_reset,
+                    &mut cookie.weekly_resets_at,
+                    &mut cookie.weekly_usage,
+                    WEEKLY_WINDOW_SECS,
+                    now,
+                );
+                changed |= reset_if_due(
+                    cookie.weekly_sonnet_has_reset,
+                    &mut cookie.weekly_sonnet_resets_at,
+                    &mut cookie.weekly_sonnet_usage,
+                    WEEKLY_WINDOW_SECS,
+                    now,
+                );
+                changed |= reset_if_due(
+                    cookie.weekly_opus_has_reset,
+                    &mut cookie.weekly_opus_resets_at,
+                    &mut cookie.weekly_opus_usage,
+                    WEEKLY_WINDOW_SECS,
+                    now,
+                );
                 new_exhausted.insert(cookie);
             }
             state.exhausted = new_exhausted;
@@ -443,7 +498,7 @@ impl Actor for CookieActor {
                 Self::accept(state, cookie);
             }
             CookieActorMessage::CheckReset => {
-                let changed = Self::refresh_usage_windows(state);
+                let changed = Self::refresh_usage_windows(state).await;
                 if changed {
                     Self::save(state);
                 }
@@ -454,7 +509,7 @@ impl Actor for CookieActor {
                 reply_port.send(result)?;
             }
             CookieActorMessage::GetStatus(reply_port) => {
-                let changed = Self::refresh_usage_windows(state);
+                let changed = Self::refresh_usage_windows(state).await;
                 if changed {
                     Self::save(state);
                 }

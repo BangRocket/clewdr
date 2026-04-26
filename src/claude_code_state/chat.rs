@@ -780,6 +780,36 @@ impl ClaudeCodeState {
             return;
         }
 
+        // Capture any due buckets via UsageActor rollover BEFORE we wipe usage
+        // (covers session via this code path + weekly/sonnet/opus). The helper
+        // also zeros the corresponding *_cost_usd fields, fixing a pre-existing
+        // leak where costs survived a window reset.
+        if any_due {
+            let pending = cookie.clear_due_period_buckets_with_rollover(now);
+            if !pending.is_empty()
+                && let Some(actor) = crate::services::usage_actor::USAGE_ACTOR.get()
+            {
+                let history_id = cookie.history_id();
+                for p in pending {
+                    match actor
+                        .rollover(
+                            history_id.clone(),
+                            p.trigger,
+                            p.usage,
+                            p.cost_usd,
+                            p.period_start,
+                        )
+                        .await
+                    {
+                        Ok(snap) => cookie.snapshots.push(snap),
+                        Err(e) => {
+                            warn!("rollover failed for {}: {}", history_id, e);
+                        }
+                    }
+                }
+            }
+        }
+
         cookie.resets_last_checked_at = Some(now);
         if let Some((sess, week, opus, sonnet)) = Self::fetch_usage_resets(cookie, handle).await {
             // Unknown -> decide track/not-track
