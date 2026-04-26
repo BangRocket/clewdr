@@ -97,7 +97,10 @@ pub async fn init() {
 }
 
 pub fn current() -> &'static PricingTable {
-    PRICING.get_or_init(load_fallback)
+    PRICING.get_or_init(|| {
+        warn!("pricing: init() was never called — using bundled fallback");
+        load_fallback()
+    })
 }
 
 pub fn cost(
@@ -173,7 +176,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_keeps_entries_with_pricing_skips_empty() {
+    fn parse_from_json_includes_zero_priced_entries() {
         // Demonstrates the lenient parse semantics fetch_litellm relies on.
         let json = r#"{
             "model-with-pricing": { "input_cost_per_token": 0.001, "output_cost_per_token": 0.002 },
@@ -181,7 +184,7 @@ mod tests {
         }"#;
         let table = PricingTable::parse_from_json(json, PricingSource::Litellm).unwrap();
         // parse_from_json itself is non-filtering — both entries land.
-        // The filtering happens in fetch_litellm. We document that here:
+        // (The zero-pricing filter lives in fetch_litellm, not parse_from_json.)
         assert!(table.models.contains_key("model-with-pricing"));
         assert!(table.models.contains_key("model-with-zero-pricing"));
     }
