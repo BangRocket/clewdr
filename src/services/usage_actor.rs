@@ -672,3 +672,31 @@ mod tests {
         assert_eq!(evs[0].ts, 100);
     }
 }
+
+use std::sync::OnceLock;
+
+/// Global handle to the UsageActor, initialized at startup via [`spawn`].
+/// Used by the request hot path (`add_and_bucket_usage`) to fire-and-forget
+/// usage events.
+pub static USAGE_ACTOR: OnceLock<UsageActorHandle> = OnceLock::new();
+
+/// Spawn the UsageActor and store its handle in `USAGE_ACTOR`.
+/// Idempotent — second call returns the existing handle without re-spawning.
+pub async fn spawn(history_dir: PathBuf) -> Result<UsageActorHandle, ClewdrError> {
+    if let Some(h) = USAGE_ACTOR.get() {
+        return Ok(h.clone());
+    }
+    let (actor_ref, _join) = ractor::Actor::spawn(
+        Some("usage_actor".into()),
+        UsageActor,
+        history_dir,
+    )
+    .await
+    .map_err(|e| ClewdrError::RactorError {
+        loc: snafu::Location::generate(),
+        msg: format!("spawn UsageActor: {}", e),
+    })?;
+    let handle = UsageActorHandle::new(actor_ref);
+    let _ = USAGE_ACTOR.set(handle.clone());
+    Ok(handle)
+}

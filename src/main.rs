@@ -134,6 +134,10 @@ async fn main() -> Result<(), ClewdrError> {
     // Initialize model pricing table (LiteLLM fetch with bundled fallback)
     clewdr::services::pricing::init().await;
 
+    // Spawn the usage actor (per-cookie JSONL history + cost tracking)
+    let history_dir = std::path::PathBuf::from("history");
+    clewdr::services::usage_actor::spawn(history_dir).await?;
+
     // build axum router
     // create a TCP listener
     let addr = CLEWDR_CONFIG.load().address();
