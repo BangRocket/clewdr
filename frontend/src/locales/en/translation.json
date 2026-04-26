@@ -41,8 +41,9 @@
       "graveyard": "Graveyard"
     },
     "overview": {
-      "placeholder": "Overview coming soon",
-      "cookieCount": "cookies tracked"
+      "cookieCount": "cookies tracked",
+      "costOverTime": "Cost over time",
+      "tokensOverTime": "Tokens over time"
     },
     "byCookie": {
       "placeholder": "Per-cookie breakdown coming soon"

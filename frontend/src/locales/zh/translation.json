@@ -41,8 +41,9 @@
       "graveyard": "墓地"
     },
     "overview": {
-      "placeholder": "概览即将推出",
-      "cookieCount": "个 Cookie"
+      "cookieCount": "个 Cookie",
+      "costOverTime": "费用趋势",
+      "tokensOverTime": "令牌趋势"
     },
     "byCookie": {
       "placeholder": "按 Cookie 细分即将推出"

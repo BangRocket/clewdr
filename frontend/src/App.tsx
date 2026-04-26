@@ -59,8 +59,17 @@ function App() {
     <ErrorBoundary>
       <MainLayout version={version}>
         {isAuthenticated ? (
-          // Protected content - only shown when authenticated
-          <Card className="w-full max-w-md sm:max-w-lg md:max-w-xl mx-auto">
+          // Protected content - only shown when authenticated.
+          // The Usage tab hosts wide charts and needs to escape the narrow
+          // card width used by Claude/Config/Auth. Scope the wider variant to
+          // that tab so other tabs remain unchanged.
+          <Card
+            className={`w-full mx-auto ${
+              activeTab === "usage"
+                ? "max-w-full lg:max-w-5xl xl:max-w-6xl"
+                : "max-w-md sm:max-w-lg md:max-w-xl"
+            }`}
+          >
             <TabNavigation
               tabs={tabs}
               activeTab={activeTab}
