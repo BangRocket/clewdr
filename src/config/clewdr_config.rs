@@ -130,6 +130,12 @@ pub struct ClewdrConfig {
     #[serde(default)]
     pub claude_code_telemetry: bool,
 
+    // Usage history retention, can hot reload
+    #[serde(default)]
+    pub history_event_retention_days: Option<u32>,
+    #[serde(default)]
+    pub history_snapshot_max_per_cookie: Option<u32>,
+
     // Skip field, can hot reload
     #[serde(skip)]
     pub wreq_proxy: Option<Proxy>,
@@ -167,6 +173,8 @@ impl Default for ClewdrConfig {
             claude_code_client_id: None,
             custom_system: None,
             claude_code_telemetry: false,
+            history_event_retention_days: None,
+            history_snapshot_max_per_cookie: None,
             no_fs: false,
             log_to_file: false,
         }
