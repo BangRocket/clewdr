@@ -103,6 +103,18 @@ impl UselessCookie {
         self
     }
 
+    /// One-time backfill: if `final_snapshot.cost_usd == 0` but its usage has tokens,
+    /// estimate from current pricing. Intended for upgrade-time migration.
+    pub fn backfill_costs(&mut self) -> bool {
+        if let Some(snap) = self.final_snapshot.as_mut() {
+            if snap.cost_usd == 0.0 && snap.usage.total_input_tokens > 0 {
+                snap.cost_usd = snap.usage.estimate_cost();
+                return true;
+            }
+        }
+        false
+    }
+
     /// SHA-256 first 16 hex chars of the cookie value. Stable, non-reversible.
     /// Mirrors `CookieStatus::history_id` so dead-cookie records can be
     /// correlated with their pre-death history files.

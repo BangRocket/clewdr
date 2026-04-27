@@ -51,6 +51,43 @@ pub struct UsageBreakdown {
     pub opus_output_tokens: u64,
 }
 
+impl UsageBreakdown {
+    /// Estimate USD cost from token counts using current pricing rates.
+    /// Sonnet tokens use sonnet rates; opus tokens use opus rates;
+    /// remaining "other" tokens fall back to sonnet rates as a conservative default.
+    pub fn estimate_cost(&self) -> f64 {
+        const SONNET_MODEL: &str = "claude-sonnet-4-5-20250929";
+        const OPUS_MODEL: &str = "claude-opus-4-1-20250805";
+
+        let other_input = self
+            .total_input_tokens
+            .saturating_sub(self.sonnet_input_tokens)
+            .saturating_sub(self.opus_input_tokens);
+        let other_output = self
+            .total_output_tokens
+            .saturating_sub(self.sonnet_output_tokens)
+            .saturating_sub(self.opus_output_tokens);
+
+        let sonnet_cost = crate::services::pricing::cost(
+            SONNET_MODEL,
+            self.sonnet_input_tokens,
+            self.sonnet_output_tokens,
+            0,
+            0,
+        );
+        let opus_cost = crate::services::pricing::cost(
+            OPUS_MODEL,
+            self.opus_input_tokens,
+            self.opus_output_tokens,
+            0,
+            0,
+        );
+        let other_cost = crate::services::pricing::cost(SONNET_MODEL, other_input, other_output, 0, 0);
+
+        sonnet_cost + opus_cost + other_cost
+    }
+}
+
 /// Window length constants matching the periods tracked on `CookieStatus`.
 pub const SESSION_WINDOW_SECS: i64 = 5 * 60 * 60; // 5h
 pub const WEEKLY_WINDOW_SECS: i64 = 7 * 24 * 60 * 60; // 7d
@@ -568,6 +605,34 @@ impl CookieStatus {
         }
     }
 
+    /// One-time backfill: if any period's `*_cost_usd` is 0 but its `*_usage` has tokens,
+    /// estimate the cost from current pricing. Intended for upgrade-time migration of
+    /// configs that pre-date cost tracking.
+    pub fn backfill_costs(&mut self) -> bool {
+        let mut changed = false;
+        if self.lifetime_cost_usd == 0.0 && self.lifetime_usage.total_input_tokens > 0 {
+            self.lifetime_cost_usd = self.lifetime_usage.estimate_cost();
+            changed = true;
+        }
+        if self.weekly_cost_usd == 0.0 && self.weekly_usage.total_input_tokens > 0 {
+            self.weekly_cost_usd = self.weekly_usage.estimate_cost();
+            changed = true;
+        }
+        if self.weekly_sonnet_cost_usd == 0.0 && self.weekly_sonnet_usage.total_input_tokens > 0 {
+            self.weekly_sonnet_cost_usd = self.weekly_sonnet_usage.estimate_cost();
+            changed = true;
+        }
+        if self.weekly_opus_cost_usd == 0.0 && self.weekly_opus_usage.total_input_tokens > 0 {
+            self.weekly_opus_cost_usd = self.weekly_opus_usage.estimate_cost();
+            changed = true;
+        }
+        if self.session_cost_usd == 0.0 && self.session_usage.total_input_tokens > 0 {
+            self.session_cost_usd = self.session_usage.estimate_cost();
+            changed = true;
+        }
+        changed
+    }
+
     /// SHA-256 first 16 hex chars of the cookie value. Stable, non-reversible.
     /// Used as filename for the per-cookie history JSONL.
     pub fn history_id(&self) -> String {
@@ -759,5 +824,31 @@ mod tests {
         assert!(!pending.iter().any(|p| matches!(p.trigger, crate::config::SnapshotTrigger::WeeklyReset)));
         // Cost preserved
         assert!((c.weekly_cost_usd - 0.05).abs() < 1e-9);
+    }
+
+    #[test]
+    fn backfill_costs_fills_zero_cost_when_tokens_present() {
+        let mut c = CookieStatus::new(&make_base_cookie_with_len(86), None).unwrap();
+        c.lifetime_usage.total_input_tokens = 1_000_000;
+        c.lifetime_usage.total_output_tokens = 100_000;
+        c.lifetime_usage.sonnet_input_tokens = 1_000_000;
+        c.lifetime_usage.sonnet_output_tokens = 100_000;
+        assert_eq!(c.lifetime_cost_usd, 0.0);
+        let changed = c.backfill_costs();
+        assert!(changed);
+        // 1M input * $3/M + 100K output * $15/M = $3 + $1.5 = $4.50
+        assert!(c.lifetime_cost_usd > 4.0 && c.lifetime_cost_usd < 5.0,
+                "expected ~4.50, got {}", c.lifetime_cost_usd);
+    }
+
+    #[test]
+    fn backfill_costs_does_not_overwrite_existing_cost() {
+        let mut c = CookieStatus::new(&make_base_cookie_with_len(86), None).unwrap();
+        c.lifetime_usage.total_input_tokens = 1_000_000;
+        c.lifetime_usage.sonnet_input_tokens = 1_000_000;
+        c.lifetime_cost_usd = 999.0;
+        let changed = c.backfill_costs();
+        assert!(!changed);
+        assert_eq!(c.lifetime_cost_usd, 999.0);
     }
 }

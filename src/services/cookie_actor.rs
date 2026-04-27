@@ -497,12 +497,47 @@ impl Actor for CookieActor {
             .time_to_idle(std::time::Duration::from_secs(60 * 60))
             .build();
 
-        let state = CookieActorState {
+        let mut state = CookieActorState {
             valid,
             exhausted,
             invalid,
             moka,
         };
+
+        // One-time cost backfill for cookies whose usage tokens accumulated
+        // before cost tracking shipped. Only fills `*_cost_usd` fields that
+        // are currently 0 *and* have tokens; never overwrites existing costs.
+        // After the first save, subsequent process starts will be no-ops.
+        let mut any_changed = false;
+        for c in state.valid.iter_mut() {
+            if c.backfill_costs() {
+                any_changed = true;
+            }
+        }
+        if !state.exhausted.is_empty() {
+            let mut new_exhausted = HashSet::with_capacity(state.exhausted.len());
+            for mut c in state.exhausted.drain() {
+                if c.backfill_costs() {
+                    any_changed = true;
+                }
+                new_exhausted.insert(c);
+            }
+            state.exhausted = new_exhausted;
+        }
+        if !state.invalid.is_empty() {
+            let mut new_invalid = HashSet::with_capacity(state.invalid.len());
+            for mut u in state.invalid.drain() {
+                if u.backfill_costs() {
+                    any_changed = true;
+                }
+                new_invalid.insert(u);
+            }
+            state.invalid = new_invalid;
+        }
+        if any_changed {
+            Self::save(&state);
+            tracing::info!("backfilled cost fields for cookies missing cost data");
+        }
 
         CookieActor::log(&state);
         Ok(state)
