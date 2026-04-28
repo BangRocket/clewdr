@@ -3,6 +3,8 @@ use clewdr::codex_state::transform::{
 };
 use clewdr::types::codex::CodexSseEvent;
 
+use clewdr::codex_state::transform::aggregate_codex_events;
+
 #[test]
 fn output_text_delta_becomes_oai_content_chunk() {
     let event = CodexSseEvent::OutputTextDelta { delta: "hello".to_string() };
@@ -34,4 +36,25 @@ fn completed_event_emits_finish_reason_and_usage() {
     assert_eq!(usage.prompt_tokens, 100);
     assert_eq!(usage.completion_tokens, 50);
     assert_eq!(usage.total_tokens, 150);
+}
+
+#[test]
+fn aggregates_deltas_into_full_completion() {
+    let events = vec![
+        CodexSseEvent::OutputTextDelta { delta: "Hello, ".to_string() },
+        CodexSseEvent::OutputTextDelta { delta: "world!".to_string() },
+        CodexSseEvent::Completed {
+            response: clewdr::types::codex::CodexFinalResponse {
+                usage: Some(clewdr::types::codex::CodexUsage {
+                    input_tokens: 5, output_tokens: 3, total_tokens: Some(8),
+                }),
+                output: vec![],
+            },
+        },
+    ];
+    let resp = aggregate_codex_events(&events, "id", "gpt-5").expect("aggregates");
+    let v = serde_json::to_value(&resp).unwrap();
+    assert_eq!(v["object"], "chat.completion");
+    assert_eq!(v["choices"][0]["message"]["content"], "Hello, world!");
+    assert_eq!(v["usage"]["total_tokens"], 8);
 }

@@ -186,3 +186,65 @@ pub fn codex_event_to_oai_chunk(
         _ => None,
     }
 }
+
+#[derive(Debug, Clone, Serialize)]
+pub struct OaiCompletion {
+    pub id: String,
+    pub object: &'static str,
+    pub created: i64,
+    pub model: String,
+    pub choices: Vec<OaiCompletionChoice>,
+    pub usage: OaiUsage,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct OaiCompletionChoice {
+    pub index: u32,
+    pub message: OaiCompletionMessage,
+    pub finish_reason: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct OaiCompletionMessage {
+    pub role: String,
+    pub content: String,
+}
+
+pub fn aggregate_codex_events(
+    events: &[CodexSseEvent],
+    id: &str,
+    model: &str,
+) -> Result<OaiCompletion, TranslateError> {
+    let mut content = String::new();
+    let mut usage = OaiUsage { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+    for ev in events {
+        match ev {
+            CodexSseEvent::OutputTextDelta { delta } => content.push_str(delta),
+            CodexSseEvent::Completed { response } => {
+                if let Some(u) = &response.usage {
+                    usage = OaiUsage {
+                        prompt_tokens: u.input_tokens,
+                        completion_tokens: u.output_tokens,
+                        total_tokens: u.total_tokens.unwrap_or(u.input_tokens + u.output_tokens),
+                    };
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(OaiCompletion {
+        id: id.to_string(),
+        object: "chat.completion",
+        created: chrono::Utc::now().timestamp(),
+        model: model.to_string(),
+        choices: vec![OaiCompletionChoice {
+            index: 0,
+            message: OaiCompletionMessage {
+                role: "assistant".to_string(),
+                content,
+            },
+            finish_reason: "stop".to_string(),
+        }],
+        usage,
+    })
+}
