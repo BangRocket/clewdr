@@ -58,3 +58,56 @@ async fn streams_codex_sse_into_oai_chunks() {
     assert!(s.contains("\"content\":\"hi\""), "stream body: {s}");
     assert!(s.contains("[DONE]"));
 }
+
+#[tokio::test]
+async fn rotates_on_401_and_succeeds_on_second_cred() {
+    let api = MockServer::start().await;
+
+    let bad_token = ResponseTemplate::new(401);
+    let good_body =
+        "event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"ok\"}\n\n\
+         event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{}}\n\n";
+
+    Mock::given(method("POST"))
+        .and(path("/responses"))
+        .and(header("authorization", "Bearer cred-a"))
+        .respond_with(bad_token)
+        .mount(&api)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/responses"))
+        .and(header("authorization", "Bearer cred-b"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(good_body),
+        )
+        .mount(&api)
+        .await;
+
+    let mut a = auth_for_test();
+    a.id = "a".into();
+    a.access_token = "cred-a".into();
+    let mut b = auth_for_test();
+    b.id = "b".into();
+    b.access_token = "cred-b".into();
+    let actor = CodexAuthActorHandle::start_with(vec![a, b]).await.unwrap();
+    let mut state = CodexState::new(actor);
+    state.api_base = api.uri();
+    state.stream = true;
+
+    let req = serde_json::from_value::<clewdr::types::oai::CreateMessageParams>(
+        serde_json::json!({
+            "model": "gpt-5",
+            "messages": [{"role": "user", "content": "hi"}],
+            "stream": true
+        }),
+    )
+    .unwrap();
+    let response = state.try_chat(req).await.expect("rotates and succeeds");
+    let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024)
+        .await
+        .unwrap();
+    let s = std::str::from_utf8(&bytes).unwrap();
+    assert!(s.contains("\"content\":\"ok\""));
+}
