@@ -25,7 +25,10 @@ use crate::{
 
 const CODEX_ORIGINATOR: &str = "codex_cli_rs";
 const CODEX_OPENAI_BETA: &str = "responses=experimental";
-const CODEX_CLI_VERSION: &str = "0.21.0";
+// Match a recent Codex CLI release. Codex backend gates new models on this
+// header (e.g. gpt-5.5 requires >= 0.30 at time of writing). Bump when
+// shipping support for newer models. Latest release: github.com/openai/codex.
+const CODEX_CLI_VERSION: &str = "0.125.0";
 
 impl CodexState {
     pub async fn try_chat(
