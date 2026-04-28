@@ -16,12 +16,12 @@ use crate::{
     codex_state::{
         CodexState,
         transform::{
-            CodexStreamState, aggregate_codex_events, translate_chat_completions_to_codex,
+            CodexStreamState, aggregate_codex_events, translate_oai_request_to_codex,
         },
     },
     config::{CLEWDR_CONFIG, CodexAuthStatus},
     error::{ClewdrError, WreqSnafu},
-    types::{codex::CodexSseEvent, oai::CreateMessageParams},
+    types::codex::CodexSseEvent,
 };
 
 const CODEX_ORIGINATOR: &str = "codex_cli_rs";
@@ -34,14 +34,17 @@ const CODEX_CLI_VERSION: &str = "0.125.0";
 impl CodexState {
     pub async fn try_chat(
         &mut self,
-        request: CreateMessageParams,
+        request: serde_json::Value,
     ) -> Result<Response, ClewdrError> {
-        // Translate OAI -> Codex Responses request.
-        let codex_body =
-            translate_chat_completions_to_codex(&request).map_err(|e| ClewdrError::CodexError {
+        // Translate OAI -> Codex Responses request. The handler hands us raw
+        // JSON because Claude's `Message` enum rejects valid OAI shapes
+        // (assistant.tool_calls without content; role: "tool").
+        let codex_body = translate_oai_request_to_codex(&request).map_err(|e| {
+            ClewdrError::CodexError {
                 loc: Location::generate(),
                 msg: format!("codex translate: {e}"),
-            })?;
+            }
+        })?;
 
         // Convert to JSON Value so we can apply Codex-specific sanitization.
         let mut value =
@@ -51,8 +54,11 @@ impl CodexState {
             })?;
         sanitize_codex_body(&mut value);
 
-        let model = request.model.clone();
-        let client_wants_stream = request.stream.unwrap_or(false);
+        let model = codex_body.model.clone();
+        let client_wants_stream = request
+            .get("stream")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         // Track whether the client wants streaming output; upstream is always streamed.
         self.stream = client_wants_stream;
 

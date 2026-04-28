@@ -27,7 +27,19 @@ pub struct CodexRequest {
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum CodexInputItem {
-    Message { role: String, content: Vec<CodexContent> },
+    Message {
+        role: String,
+        content: Vec<CodexContent>,
+    },
+    FunctionCall {
+        call_id: String,
+        name: String,
+        arguments: String,
+    },
+    FunctionCallOutput {
+        call_id: String,
+        output: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize)]

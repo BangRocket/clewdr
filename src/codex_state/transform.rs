@@ -1,7 +1,7 @@
-use crate::types::claude::{ContentBlock, Message, MessageContent, Role, Tool};
 use crate::types::codex::{CodexContent, CodexInputItem, CodexRequest, CodexSseEvent};
 use crate::types::oai::CreateMessageParams;
 use serde::Serialize;
+use serde_json::Value;
 use snafu::Snafu;
 use tracing::warn;
 
@@ -32,96 +32,226 @@ pub enum TranslateError {
     IncompleteStream,
 }
 
-fn extract_text(msg: &Message) -> String {
-    match &msg.content {
-        MessageContent::Text { content } => content.clone(),
-        MessageContent::Blocks { content } => content
-            .iter()
-            .filter_map(|b| match b {
-                ContentBlock::Text { text, .. } => Some(text.clone()),
-                _ => {
-                    warn!("dropping non-text content block in codex translation");
-                    None
-                }
-            })
-            .collect::<Vec<_>>()
-            .join("\n"),
-    }
-}
-
+/// Backward-compat shim. Tests and any caller that already has a typed
+/// `CreateMessageParams` go through here; the real translation logic lives in
+/// [`translate_oai_request_to_codex`], which accepts raw JSON and tolerates
+/// shapes (assistant messages with `tool_calls`, `role: "tool"`) that the
+/// Claude-flavored `Message` types reject.
 pub fn translate_chat_completions_to_codex(
     req: &CreateMessageParams,
 ) -> Result<CodexRequest, TranslateError> {
     if req.messages.is_empty() {
         return Err(TranslateError::NoMessages);
     }
+    let value = serde_json::to_value(req).map_err(|e| TranslateError::UpstreamError {
+        message: format!("serialize CreateMessageParams: {e}"),
+        code: None,
+    })?;
+    translate_oai_request_to_codex(&value)
+}
+
+/// Translate a raw OAI-shape chat-completion request into a Codex Responses
+/// request. Walks `messages[]` as JSON so we can accept shapes Claude's
+/// strict `Message` enum rejects:
+///
+/// - assistant messages with no `content` but a `tool_calls` array
+/// - `role: "tool"` (and legacy `role: "function"`) tool-result messages
+/// - multi-modal `content` arrays (image/audio parts dropped with warn)
+pub fn translate_oai_request_to_codex(req: &Value) -> Result<CodexRequest, TranslateError> {
+    let messages = req
+        .get("messages")
+        .and_then(|v| v.as_array())
+        .ok_or(TranslateError::NoMessages)?;
+    if messages.is_empty() {
+        return Err(TranslateError::NoMessages);
+    }
 
     let mut system_parts: Vec<String> = Vec::new();
     let mut input: Vec<CodexInputItem> = Vec::new();
-    for m in &req.messages {
-        let text = extract_text(m);
-        match m.role {
-            Role::System => system_parts.push(text),
-            Role::User => input.push(CodexInputItem::Message {
-                role: "user".to_string(),
-                content: vec![CodexContent::InputText { text }],
-            }),
-            Role::Assistant => input.push(CodexInputItem::Message {
-                role: "assistant".to_string(),
-                content: vec![CodexContent::OutputText { text }],
-            }),
+
+    for msg in messages {
+        let role = msg.get("role").and_then(|v| v.as_str()).unwrap_or("");
+        match role {
+            "system" | "developer" => {
+                let text = extract_message_text(msg);
+                if !text.is_empty() {
+                    system_parts.push(text);
+                }
+            }
+            "user" => {
+                let text = extract_message_text(msg);
+                input.push(CodexInputItem::Message {
+                    role: "user".to_string(),
+                    content: vec![CodexContent::InputText { text }],
+                });
+            }
+            "assistant" => {
+                let text = extract_message_text(msg);
+                if !text.is_empty() {
+                    input.push(CodexInputItem::Message {
+                        role: "assistant".to_string(),
+                        content: vec![CodexContent::OutputText { text }],
+                    });
+                }
+                if let Some(tool_calls) = msg.get("tool_calls").and_then(|v| v.as_array()) {
+                    for tc in tool_calls {
+                        let call_id = tc
+                            .get("id")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or_default()
+                            .to_string();
+                        let function = tc.get("function");
+                        let name = function
+                            .and_then(|f| f.get("name"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or_default()
+                            .to_string();
+                        // OAI sends arguments as a JSON-encoded string; pass it through
+                        // verbatim. Tolerate the rare case where a client sent an object.
+                        let arguments = match function.and_then(|f| f.get("arguments")) {
+                            Some(Value::String(s)) => s.clone(),
+                            Some(other) => other.to_string(),
+                            None => String::new(),
+                        };
+                        if call_id.is_empty() || name.is_empty() {
+                            warn!(
+                                "dropping assistant tool_call with missing id or name in codex translation"
+                            );
+                            continue;
+                        }
+                        input.push(CodexInputItem::FunctionCall {
+                            call_id,
+                            name,
+                            arguments,
+                        });
+                    }
+                }
+            }
+            // OpenAI's modern `tool` role. The legacy `function` role carries
+            // the same payload (id + result string), so handle them together.
+            "tool" | "function" => {
+                let call_id = msg
+                    .get("tool_call_id")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    // Legacy `function` role uses `name` instead of `tool_call_id`.
+                    .or_else(|| {
+                        msg.get("name")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string())
+                    })
+                    .unwrap_or_default();
+                let output = extract_message_text(msg);
+                if call_id.is_empty() {
+                    warn!("dropping tool message with no tool_call_id in codex translation");
+                    continue;
+                }
+                input.push(CodexInputItem::FunctionCallOutput { call_id, output });
+            }
+            other => {
+                warn!("dropping message with unsupported role `{other}` in codex translation");
+            }
         }
     }
 
-    // Codex backend rejects requests without an `instructions` field
-    // (responds with `{"detail":"Instructions are required"}`). Use a generic
-    // default when the client doesn't supply a system message.
+    // Codex backend rejects requests without `instructions`. Default to a
+    // generic value when the client doesn't supply one.
     let instructions = if system_parts.is_empty() {
         Some("You are a helpful assistant.".to_string())
     } else {
         Some(system_parts.join("\n\n"))
     };
 
-    // Tools: normalize Chat Completions function tools to Responses-style tools.
-    // Drop Known (Anthropic-specific) tools.
-    let tools: Vec<serde_json::Value> = req
-        .tools
-        .as_ref()
+    let tools: Vec<Value> = req
+        .get("tools")
+        .and_then(|v| v.as_array())
         .map(|ts| {
             ts.iter()
-                .filter_map(|t| match t {
-                    Tool::Known(_) => {
-                        warn!("dropping Anthropic-specific tool in codex translation");
-                        None
-                    }
-                    Tool::Custom(_) | Tool::Raw(_) => {
-                        serde_json::to_value(t).ok().and_then(normalize_codex_tool)
-                    }
-                })
+                .cloned()
+                .filter_map(normalize_codex_tool)
                 .collect()
         })
         .unwrap_or_default();
 
-    let tool_choice = req
-        .tool_choice
-        .as_ref()
-        .and_then(|tc| serde_json::to_value(tc).ok());
+    let tool_choice = req.get("tool_choice").cloned();
 
-    let max_output_tokens = req.max_tokens.or(req.max_completion_tokens);
+    let model = req
+        .get("model")
+        .and_then(|v| v.as_str())
+        .unwrap_or("gpt-5")
+        .to_string();
+
+    let max_output_tokens = req
+        .get("max_tokens")
+        .and_then(|v| v.as_u64())
+        .or_else(|| req.get("max_completion_tokens").and_then(|v| v.as_u64()))
+        .map(|n| n as u32);
+
+    let temperature = req
+        .get("temperature")
+        .and_then(|v| v.as_f64())
+        .map(|n| n as f32);
+    let top_p = req
+        .get("top_p")
+        .and_then(|v| v.as_f64())
+        .map(|n| n as f32);
+    let stream = req
+        .get("stream")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
 
     Ok(CodexRequest {
-        model: req.model.clone(),
+        model,
         input,
         instructions,
-        temperature: req.temperature,
-        top_p: req.top_p,
+        temperature,
+        top_p,
         max_output_tokens,
         tools,
         tool_choice,
         text: None,
-        stream: req.stream.unwrap_or(false),
+        stream,
     })
 }
+
+/// Pull text out of an OAI-shape message's `content` field. Accepts a string,
+/// or an array of content parts (`{type: "text"|"input_text"|"output_text", text}`).
+/// Multi-modal parts (image/audio) are dropped with a warn.
+fn extract_message_text(msg: &Value) -> String {
+    let Some(content) = msg.get("content") else {
+        return String::new();
+    };
+    match content {
+        Value::String(s) => s.clone(),
+        Value::Array(parts) => {
+            let mut chunks: Vec<String> = Vec::new();
+            for part in parts {
+                let part_type = part.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                match part_type {
+                    "text" | "input_text" | "output_text" => {
+                        if let Some(t) = part.get("text").and_then(|v| v.as_str()) {
+                            chunks.push(t.to_string());
+                        }
+                    }
+                    other => {
+                        warn!(
+                            "dropping unsupported content part `{other}` in codex translation"
+                        );
+                    }
+                }
+            }
+            chunks.join("\n")
+        }
+        Value::Null => String::new(),
+        other => {
+            warn!(
+                "unexpected `content` shape in codex translation; coercing to string: {other}"
+            );
+            other.to_string()
+        }
+    }
+}
+
 
 fn normalize_codex_tool(mut tool: serde_json::Value) -> Option<serde_json::Value> {
     let Some(obj) = tool.as_object_mut() else {

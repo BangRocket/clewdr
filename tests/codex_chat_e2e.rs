@@ -48,8 +48,7 @@ async fn streams_codex_sse_into_oai_chunks() {
         "messages": [{"role": "user", "content": "hi"}],
         "stream": true
     });
-    let parsed: clewdr::types::oai::CreateMessageParams = serde_json::from_value(req).unwrap();
-    let response = state.try_chat(parsed).await.expect("response");
+    let response = state.try_chat(req).await.expect("response");
 
     let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024)
         .await
@@ -96,14 +95,11 @@ async fn rotates_on_401_and_succeeds_on_second_cred() {
     state.api_base = api.uri();
     state.stream = true;
 
-    let req = serde_json::from_value::<clewdr::types::oai::CreateMessageParams>(
-        serde_json::json!({
-            "model": "gpt-5",
-            "messages": [{"role": "user", "content": "hi"}],
-            "stream": true
-        }),
-    )
-    .unwrap();
+    let req = serde_json::json!({
+        "model": "gpt-5",
+        "messages": [{"role": "user", "content": "hi"}],
+        "stream": true
+    });
     let response = state.try_chat(req).await.expect("rotates and succeeds");
     let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024)
         .await
@@ -157,14 +153,11 @@ async fn streams_codex_tool_call_events_into_oai_tool_call_chunks() {
     state.api_base = api.uri();
     state.stream = true;
 
-    let req = serde_json::from_value::<clewdr::types::oai::CreateMessageParams>(
-        serde_json::json!({
-            "model": "gpt-5",
-            "messages": [{"role": "user", "content": "hi"}],
-            "stream": true
-        }),
-    )
-    .unwrap();
+    let req = serde_json::json!({
+        "model": "gpt-5",
+        "messages": [{"role": "user", "content": "hi"}],
+        "stream": true
+    });
     let response = state.try_chat(req).await.expect("response");
 
     let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024)
@@ -237,17 +230,84 @@ async fn body_forces_stream_and_strips_unsupported_fields() {
     state.api_base = api.uri();
     state.stream = false;
 
-    let req = serde_json::from_value::<clewdr::types::oai::CreateMessageParams>(
-        serde_json::json!({
-            "model": "gpt-5",
-            "messages": [{"role": "user", "content": "hi"}],
-            "max_tokens": 256,
-            "temperature": 0.7,
-            "stream": false
-        }),
-    )
-    .unwrap();
+    let req = serde_json::json!({
+        "model": "gpt-5",
+        "messages": [{"role": "user", "content": "hi"}],
+        "max_tokens": 256,
+        "temperature": 0.7,
+        "stream": false
+    });
     let response = state.try_chat(req).await.expect("ok");
     // Just confirm we got 2xx; body matcher already validated stream=true + store=false.
     assert_eq!(response.status(), 200);
+}
+
+#[tokio::test]
+async fn e2e_tool_call_continuation_request_succeeds() {
+    use wiremock::matchers::body_partial_json;
+
+    let api = MockServer::start().await;
+    let good_body =
+        "event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"done\"}\n\n\
+         event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{}}\n\n";
+
+    // Match: the upstream request body must contain a function_call input
+    // item (from the assistant's prior tool_calls) and a function_call_output
+    // input item (from the tool message), in that order.
+    let expected = serde_json::json!({
+        "input": [
+            {"type": "message", "role": "user"},
+            {"type": "function_call", "call_id": "call_xyz", "name": "read_text_file"},
+            {"type": "function_call_output", "call_id": "call_xyz", "output": "<file contents>"},
+            {"type": "message", "role": "user"}
+        ]
+    });
+
+    Mock::given(method("POST"))
+        .and(path("/responses"))
+        .and(body_partial_json(expected))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(good_body),
+        )
+        .mount(&api)
+        .await;
+
+    let actor = CodexAuthActorHandle::start_with(vec![auth_for_test()])
+        .await
+        .unwrap();
+    let mut state = CodexState::new(actor);
+    state.api_base = api.uri();
+    state.stream = true;
+
+    let req = serde_json::json!({
+        "model": "gpt-5.5",
+        "messages": [
+            {"role": "system", "content": "be helpful"},
+            {"role": "user", "content": "read x.txt"},
+            {
+                "role": "assistant",
+                "tool_calls": [{
+                    "id": "call_xyz",
+                    "type": "function",
+                    "function": {
+                        "name": "read_text_file",
+                        "arguments": "{\"path\":\"x.txt\"}"
+                    }
+                }]
+            },
+            {"role": "tool", "content": "<file contents>", "tool_call_id": "call_xyz"},
+            {"role": "user", "content": "continue..."}
+        ],
+        "stream": true
+    });
+    let response = state.try_chat(req).await.expect("ok");
+    assert_eq!(response.status(), 200);
+    let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024)
+        .await
+        .unwrap();
+    let s = std::str::from_utf8(&bytes).unwrap();
+    assert!(s.contains("\"content\":\"done\""), "stream body: {s}");
+    assert!(s.contains("[DONE]"));
 }

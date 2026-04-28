@@ -16,16 +16,20 @@ use crate::{
         codex::{CodexInvocation, CodexProvider},
     },
     services::codex_auth_actor::CodexAuthActorHandle,
-    types::oai::CreateMessageParams,
 };
 
 // ========== OAI surface ==========
 
+/// Accept the request body as raw JSON. We deliberately bypass typed
+/// deserialization here because OAI conversation history can include shapes
+/// (assistant `tool_calls` without `content`, `role: "tool"`) that Claude's
+/// strict `Message`/`Role` enums reject. The Codex translator walks the JSON
+/// and emits the right Codex Responses input items.
 pub async fn api_codex_chat(
     State(provider): State<Arc<CodexProvider>>,
-    Json(params): Json<CreateMessageParams>,
+    Json(body): Json<serde_json::Value>,
 ) -> Result<axum::response::Response, ClewdrError> {
-    provider.invoke(CodexInvocation { params }).await
+    provider.invoke(CodexInvocation { body }).await
 }
 
 #[derive(Serialize)]
