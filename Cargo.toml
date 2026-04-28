@@ -97,6 +97,9 @@ rustls = { version = "0.23", default-features = false, features = [
 ] }
 
 
+[dev-dependencies]
+wiremock = "0.6"
+
 [features]
 default = ["portable", "external-resource", "mimalloc"]
 tokio-console = ["dep:console-subscriber", "tokio/tracing"]
