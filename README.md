@@ -29,6 +29,8 @@ It keeps resource usage low, serves OpenAI-style endpoints, and ships with a sma
 
 Streaming responses work on every endpoint.
 
+`/v1/chat/completions` (the bare OpenAI-compat path) routes to **Claude** by default but can be flipped to **Codex** via the `Default OAI Backend` toggle in the Config tab (or `default_oai_backend = "codex"` in `clewdr.toml`). Path-specific routes (`/code/v1/*`, `/codex/v1/*`) are unaffected and always hit their dedicated backend.
+
 ## Quick Start
 
 1. Download the latest release for your platform from GitHub.  
@@ -85,7 +87,7 @@ ClewdR can route requests to OpenAI's Codex backend using OAuth tokens minted by
 
 ClewdR auto-refreshes access tokens on each request when within 60s of expiry; no further action needed unless the refresh token is revoked (re-run `codex login` and re-paste).
 
-Endpoint: `POST http://127.0.0.1:8484/codex/v1/chat/completions` (OpenAI-compatible).
+Endpoint: `POST http://127.0.0.1:8484/codex/v1/chat/completions` (OpenAI-compatible). Or, with the toggle set to `codex`, the bare `POST http://127.0.0.1:8484/v1/chat/completions` will also route here.
 
 Supported models: `gpt-5-codex`, `gpt-5`, `gpt-4.1`, `o3`, `o4-mini`. (Codex's upstream may map these to internal model names like `gpt-5.3-codex`; pass-through behavior.)
 
