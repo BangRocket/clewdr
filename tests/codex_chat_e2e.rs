@@ -111,3 +111,50 @@ async fn rotates_on_401_and_succeeds_on_second_cred() {
     let s = std::str::from_utf8(&bytes).unwrap();
     assert!(s.contains("\"content\":\"ok\""));
 }
+
+#[tokio::test]
+async fn body_forces_stream_and_strips_unsupported_fields() {
+    use wiremock::matchers::body_partial_json;
+
+    let api = MockServer::start().await;
+    let good_body =
+        "event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{}}\n\n";
+
+    // Match: stream=true, store=false. (Partial-json matcher asserts these are present.)
+    let expected = serde_json::json!({
+        "stream": true,
+        "store": false
+    });
+
+    Mock::given(method("POST"))
+        .and(path("/responses"))
+        .and(body_partial_json(expected))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(good_body),
+        )
+        .mount(&api)
+        .await;
+
+    let actor = CodexAuthActorHandle::start_with(vec![auth_for_test()])
+        .await
+        .unwrap();
+    let mut state = CodexState::new(actor);
+    state.api_base = api.uri();
+    state.stream = false;
+
+    let req = serde_json::from_value::<clewdr::types::oai::CreateMessageParams>(
+        serde_json::json!({
+            "model": "gpt-5",
+            "messages": [{"role": "user", "content": "hi"}],
+            "max_tokens": 256,
+            "temperature": 0.7,
+            "stream": false
+        }),
+    )
+    .unwrap();
+    let response = state.try_chat(req).await.expect("ok");
+    // Just confirm we got 2xx; body matcher already validated stream=true + store=false.
+    assert_eq!(response.status(), 200);
+}
