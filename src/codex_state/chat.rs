@@ -181,8 +181,30 @@ impl CodexState {
             let id = id_clone.clone();
             let model = model.clone();
             async move {
-                let evt = evt.ok()?;
-                let parsed: CodexSseEvent = serde_json::from_str(&evt.data).ok()?;
+                let evt = match evt {
+                    Ok(e) => e,
+                    Err(e) => {
+                        tracing::debug!(target: "codex::sse_raw", "stream error: {e}");
+                        return None;
+                    }
+                };
+                tracing::debug!(
+                    target: "codex::sse_raw",
+                    "event={} data={}",
+                    if evt.event.is_empty() { "<unset>" } else { &evt.event },
+                    truncate_for_log(&evt.data, 256)
+                );
+                let parsed: CodexSseEvent = match serde_json::from_str(&evt.data) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        tracing::debug!(
+                            target: "codex::sse_raw",
+                            "failed to parse codex event: {e}; data={}",
+                            truncate_for_log(&evt.data, 256)
+                        );
+                        return None;
+                    }
+                };
                 let chunk = codex_event_to_oai_chunk(&parsed, &id, &model, created)?;
                 let json = serde_json::to_string(&chunk).ok()?;
                 Some(Ok::<_, std::io::Error>(format!("data: {json}\n\n")))
@@ -217,14 +239,30 @@ impl CodexState {
         })?;
         let mut events: Vec<CodexSseEvent> = Vec::new();
         for chunk in text.split("\n\n") {
+            let mut event_name: Option<&str> = None;
             for line in chunk.lines() {
+                if let Some(name) = line.strip_prefix("event: ") {
+                    event_name = Some(name.trim());
+                    continue;
+                }
                 if let Some(data) = line.strip_prefix("data: ") {
                     let trimmed = data.trim();
                     if trimmed == "[DONE]" {
                         continue;
                     }
-                    if let Ok(ev) = serde_json::from_str::<CodexSseEvent>(trimmed) {
-                        events.push(ev);
+                    tracing::debug!(
+                        target: "codex::sse_raw",
+                        "event={} data={}",
+                        event_name.unwrap_or("<unset>"),
+                        truncate_for_log(trimmed, 256)
+                    );
+                    match serde_json::from_str::<CodexSseEvent>(trimmed) {
+                        Ok(ev) => events.push(ev),
+                        Err(e) => tracing::debug!(
+                            target: "codex::sse_raw",
+                            "failed to parse codex event: {e}; data={}",
+                            truncate_for_log(trimmed, 256)
+                        ),
                     }
                 }
             }
@@ -270,6 +308,16 @@ fn sanitize_codex_body(value: &mut serde_json::Value) {
                 .unwrap_or(true)
         });
     }
+}
+
+/// Truncate a string for log output, replacing newlines with spaces and
+/// appending a single ellipsis when truncated.
+fn truncate_for_log(s: &str, max_chars: usize) -> String {
+    let mut out: String = s.chars().take(max_chars).collect::<String>().replace(['\n', '\r'], " ");
+    if s.chars().count() > max_chars {
+        out.push('…');
+    }
+    out
 }
 
 /// Drain a non-success response body and return a short, human-readable
