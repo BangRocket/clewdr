@@ -460,7 +460,17 @@ export async function addCodexAuth(
   });
   if (response.status === 400) {
     const body = await response.text();
-    throw new Error(body || "Invalid auth.json");
+    let msg = body || "Invalid auth.json";
+    try {
+      const j = JSON.parse(body);
+      if (j && typeof j === "object" && "error" in j) {
+        const inner = (j as { error?: { message?: unknown } }).error?.message;
+        if (typeof inner === "string") msg = inner;
+      }
+    } catch {
+      // body wasn't JSON, fall through with raw text
+    }
+    throw new Error(msg);
   }
   if (!response.ok) {
     throw new Error(`Error ${response.status}: ${response.statusText}`);
