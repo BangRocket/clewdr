@@ -1,6 +1,7 @@
 use crate::types::claude::{ContentBlock, Message, MessageContent, Role, Tool};
-use crate::types::codex::{CodexContent, CodexInputItem, CodexRequest};
+use crate::types::codex::{CodexContent, CodexInputItem, CodexRequest, CodexSseEvent};
 use crate::types::oai::CreateMessageParams;
+use serde::Serialize;
 use snafu::Snafu;
 use tracing::warn;
 
@@ -109,4 +110,79 @@ pub fn translate_chat_completions_to_codex(
         text: None,
         stream: req.stream.unwrap_or(false),
     })
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct OaiChunk {
+    pub id: String,
+    pub object: &'static str,
+    pub created: i64,
+    pub model: String,
+    pub choices: Vec<OaiChoice>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub usage: Option<OaiUsage>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct OaiChoice {
+    pub index: u32,
+    pub delta: OaiDelta,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub finish_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct OaiDelta {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct OaiUsage {
+    pub prompt_tokens: u64,
+    pub completion_tokens: u64,
+    pub total_tokens: u64,
+}
+
+pub fn codex_event_to_oai_chunk(
+    event: &CodexSseEvent,
+    id: &str,
+    model: &str,
+) -> Option<OaiChunk> {
+    match event {
+        CodexSseEvent::OutputTextDelta { delta } => Some(OaiChunk {
+            id: id.to_string(),
+            object: "chat.completion.chunk",
+            created: chrono::Utc::now().timestamp(),
+            model: model.to_string(),
+            choices: vec![OaiChoice {
+                index: 0,
+                delta: OaiDelta {
+                    role: None,
+                    content: Some(delta.clone()),
+                },
+                finish_reason: None,
+            }],
+            usage: None,
+        }),
+        CodexSseEvent::Completed { response } => Some(OaiChunk {
+            id: id.to_string(),
+            object: "chat.completion.chunk",
+            created: chrono::Utc::now().timestamp(),
+            model: model.to_string(),
+            choices: vec![OaiChoice {
+                index: 0,
+                delta: OaiDelta::default(),
+                finish_reason: Some("stop".to_string()),
+            }],
+            usage: response.usage.as_ref().map(|u| OaiUsage {
+                prompt_tokens: u.input_tokens,
+                completion_tokens: u.output_tokens,
+                total_tokens: u.total_tokens.unwrap_or(u.input_tokens + u.output_tokens),
+            }),
+        }),
+        _ => None,
+    }
 }
