@@ -22,10 +22,11 @@ pub async fn api_get_config(
     }
 
     let mut config_json = json!(CLEWDR_CONFIG.load().as_ref());
-    // remove cookie_array and wasted_cookie
+    // remove sensitive/secret-bearing fields from the response
     if let Some(obj) = config_json.as_object_mut() {
         obj.remove("cookie_array");
         obj.remove("wasted_cookie");
+        obj.remove("codex_auth");
     }
 
     Ok(Json(config_json))
@@ -51,9 +52,10 @@ pub async fn api_post_config(
     // update config
     CLEWDR_CONFIG.rcu(|old_c| {
         let mut new_c = ClewdrConfig::clone(&c);
-        // add cookie_array and wasted_cookie
+        // preserve secret-bearing collections that the client doesn't submit
         new_c.cookie_array = old_c.cookie_array.to_owned();
         new_c.wasted_cookie = old_c.wasted_cookie.to_owned();
+        new_c.codex_auth = old_c.codex_auth.to_owned();
         new_c
     });
     if let Err(e) = CLEWDR_CONFIG.load().save().await {
