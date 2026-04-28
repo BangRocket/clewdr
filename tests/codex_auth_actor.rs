@@ -40,3 +40,23 @@ async fn dispatch_fails_when_pool_empty() {
     let handle = CodexAuthActorHandle::start_with(vec![]).await.unwrap();
     assert!(handle.request().await.is_err());
 }
+
+#[tokio::test]
+async fn submit_duplicate_id_is_rejected() {
+    let handle = CodexAuthActorHandle::start_with(vec![dummy_auth("a")])
+        .await
+        .unwrap();
+    assert!(handle.submit(dummy_auth("a")).await.is_err());
+    assert!(handle.submit(dummy_auth("b")).await.is_ok());
+}
+
+#[tokio::test]
+async fn delete_removes_from_pool() {
+    let handle = CodexAuthActorHandle::start_with(vec![dummy_auth("a"), dummy_auth("b")])
+        .await
+        .unwrap();
+    handle.delete("a".into()).await.expect("delete");
+    let list = handle.list().await.unwrap();
+    assert_eq!(list.len(), 1);
+    assert_eq!(list[0].id, "b");
+}
