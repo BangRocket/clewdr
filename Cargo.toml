@@ -68,7 +68,7 @@ arc-swap = "1"
 url = { version = "2", features = ["serde"] }
 strum = { version = "0.28", features = ["derive"] }
 moka = { version = "0.12", features = ["sync"] }
-tower = "0.5"
+tower = { version = "0.5", features = ["util"] }
 bytes = "1"
 trie-rs = "0.4"
 async-stream = "0.3"
