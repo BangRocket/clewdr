@@ -19,6 +19,10 @@ pub enum TranslateError {
     UnknownModel { model: String, valid: String },
     #[snafu(display("messages array is empty"))]
     NoMessages,
+    #[snafu(display("upstream codex error: {message}{}", code.as_deref().map(|c| format!(" ({c})")).unwrap_or_default()))]
+    UpstreamError { message: String, code: Option<String> },
+    #[snafu(display("codex stream ended without Completed event (truncated response)"))]
+    IncompleteStream,
 }
 
 fn extract_text(msg: &Message) -> String {
@@ -150,12 +154,13 @@ pub fn codex_event_to_oai_chunk(
     event: &CodexSseEvent,
     id: &str,
     model: &str,
+    created: i64,
 ) -> Option<OaiChunk> {
     match event {
         CodexSseEvent::OutputTextDelta { delta } => Some(OaiChunk {
             id: id.to_string(),
             object: "chat.completion.chunk",
-            created: chrono::Utc::now().timestamp(),
+            created,
             model: model.to_string(),
             choices: vec![OaiChoice {
                 index: 0,
@@ -170,7 +175,7 @@ pub fn codex_event_to_oai_chunk(
         CodexSseEvent::Completed { response } => Some(OaiChunk {
             id: id.to_string(),
             object: "chat.completion.chunk",
-            created: chrono::Utc::now().timestamp(),
+            created,
             model: model.to_string(),
             choices: vec![OaiChoice {
                 index: 0,
@@ -215,12 +220,14 @@ pub fn aggregate_codex_events(
     id: &str,
     model: &str,
 ) -> Result<OaiCompletion, TranslateError> {
+    let mut seen_completed = false;
     let mut content = String::new();
     let mut usage = OaiUsage { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
     for ev in events {
         match ev {
             CodexSseEvent::OutputTextDelta { delta } => content.push_str(delta),
             CodexSseEvent::Completed { response } => {
+                seen_completed = true;
                 if let Some(u) = &response.usage {
                     usage = OaiUsage {
                         prompt_tokens: u.input_tokens,
@@ -229,8 +236,17 @@ pub fn aggregate_codex_events(
                     };
                 }
             }
+            CodexSseEvent::Error { message, code } => {
+                return Err(TranslateError::UpstreamError {
+                    message: message.clone(),
+                    code: code.clone(),
+                });
+            }
             _ => {}
         }
+    }
+    if !seen_completed {
+        return Err(TranslateError::IncompleteStream);
     }
     Ok(OaiCompletion {
         id: id.to_string(),

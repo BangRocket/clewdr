@@ -1,6 +1,4 @@
-use clewdr::codex_state::transform::{
-    codex_event_to_oai_chunk, OaiChunk,
-};
+use clewdr::codex_state::transform::codex_event_to_oai_chunk;
 use clewdr::types::codex::CodexSseEvent;
 
 use clewdr::codex_state::transform::aggregate_codex_events;
@@ -8,17 +6,19 @@ use clewdr::codex_state::transform::aggregate_codex_events;
 #[test]
 fn output_text_delta_becomes_oai_content_chunk() {
     let event = CodexSseEvent::OutputTextDelta { delta: "hello".to_string() };
-    let chunk = codex_event_to_oai_chunk(&event, "msg-123", "gpt-5").expect("emits chunk");
+    let chunk = codex_event_to_oai_chunk(&event, "msg-123", "gpt-5", 1_700_000_000)
+        .expect("emits chunk");
     let json = serde_json::to_value(&chunk).unwrap();
     assert_eq!(json["object"], "chat.completion.chunk");
     assert_eq!(json["choices"][0]["delta"]["content"], "hello");
     assert_eq!(json["model"], "gpt-5");
+    assert_eq!(json["created"], 1_700_000_000);
 }
 
 #[test]
 fn unknown_event_emits_no_chunk() {
     let event = CodexSseEvent::Unknown;
-    assert!(codex_event_to_oai_chunk(&event, "msg-1", "gpt-5").is_none());
+    assert!(codex_event_to_oai_chunk(&event, "msg-1", "gpt-5", 1_700_000_000).is_none());
 }
 
 #[test]
@@ -30,7 +30,7 @@ fn completed_event_emits_finish_reason_and_usage() {
             output: vec![],
         },
     };
-    let chunk = codex_event_to_oai_chunk(&event, "id-1", "gpt-5").expect("chunk");
+    let chunk = codex_event_to_oai_chunk(&event, "id-1", "gpt-5", 1_700_000_000).expect("chunk");
     assert_eq!(chunk.choices[0].finish_reason.as_deref(), Some("stop"));
     let usage = chunk.usage.expect("usage");
     assert_eq!(usage.prompt_tokens, 100);
@@ -57,4 +57,27 @@ fn aggregates_deltas_into_full_completion() {
     assert_eq!(v["object"], "chat.completion");
     assert_eq!(v["choices"][0]["message"]["content"], "Hello, world!");
     assert_eq!(v["usage"]["total_tokens"], 8);
+}
+
+#[test]
+fn aggregator_surfaces_error_event_as_translate_error() {
+    let events = vec![
+        CodexSseEvent::OutputTextDelta { delta: "partial".into() },
+        CodexSseEvent::Error { message: "boom".into(), code: Some("rate_limit".into()) },
+    ];
+    let err = aggregate_codex_events(&events, "id", "gpt-5").expect_err("must error");
+    let s = err.to_string();
+    assert!(s.contains("boom"), "{s}");
+    assert!(s.contains("rate_limit"), "{s}");
+}
+
+#[test]
+fn aggregator_errors_when_completed_missing() {
+    let events = vec![CodexSseEvent::OutputTextDelta { delta: "abc".into() }];
+    let err = aggregate_codex_events(&events, "id", "gpt-5").expect_err("must error");
+    assert!(
+        err.to_string().to_lowercase().contains("truncated")
+            || err.to_string().to_lowercase().contains("completed"),
+        "{err}"
+    );
 }
