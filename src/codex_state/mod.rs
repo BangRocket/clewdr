@@ -66,18 +66,20 @@ impl CodexState {
         }
     }
 
-    pub fn build_request(&self, method: Method, url: impl ToString) -> RequestBuilder {
+    pub fn build_request(
+        &self,
+        method: Method,
+        url: impl ToString,
+    ) -> Result<RequestBuilder, ClewdrError> {
         let mut req = self.client.request(method, url.to_string());
         if let Some(auth) = self.auth.as_ref() {
             let bearer = format!("Bearer {}", auth.access_token);
-            if let Ok(v) = HeaderValue::from_str(&bearer) {
-                req = req.header(AUTHORIZATION, v);
-            }
-            if let Ok(v) = HeaderValue::from_str(&auth.account_id) {
-                req = req.header("chatgpt-account-id", v);
-            }
+            let bearer_value = HeaderValue::from_str(&bearer)?;
+            req = req.header(AUTHORIZATION, bearer_value);
+            let account_value = HeaderValue::from_str(&auth.account_id)?;
+            req = req.header("chatgpt-account-id", account_value);
         }
-        req
+        Ok(req)
     }
 
     /// Refresh access_token if within 60s of expiry. Returns Err and marks auth

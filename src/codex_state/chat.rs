@@ -18,12 +18,10 @@ use crate::{
             translate_chat_completions_to_codex,
         },
     },
-    config::CodexAuthStatus,
+    config::{CLEWDR_CONFIG, CodexAuthStatus},
     error::{ClewdrError, WreqSnafu},
     types::{codex::CodexSseEvent, oai::CreateMessageParams},
 };
-
-const RETRY_BUDGET: usize = 3;
 
 const CODEX_ORIGINATOR: &str = "codex_cli_rs";
 const CODEX_OPENAI_BETA: &str = "responses=experimental";
@@ -59,7 +57,7 @@ impl CodexState {
         let conversation_id = Uuid::new_v4().to_string();
 
         let mut last_err: Option<ClewdrError> = None;
-        for attempt in 0..RETRY_BUDGET {
+        for attempt in 0..CLEWDR_CONFIG.load().max_retries + 1 {
             let auth = self.request_auth().await?;
             info!(
                 "[REQ] codex stream={} model={} cred={} attempt={}",
@@ -79,7 +77,7 @@ impl CodexState {
 
             let url = format!("{}/responses", self.api_base.trim_end_matches('/'));
             let resp = self
-                .build_request(Method::POST, &url)
+                .build_request(Method::POST, &url)?
                 .header("session_id", session_id.as_str())
                 .header("conversation_id", conversation_id.as_str())
                 .header("originator", CODEX_ORIGINATOR)
