@@ -35,6 +35,12 @@ pub enum ClewdrError {
         loc: Location,
         msg: String,
     },
+    #[snafu(display("Codex error: {}, at: {}", msg, loc))]
+    CodexError {
+        #[snafu(implicit)]
+        loc: Location,
+        msg: String,
+    },
     #[snafu(display("Error requesting token: {}", source))]
     #[snafu(context(false))]
     RequestTokenError {
