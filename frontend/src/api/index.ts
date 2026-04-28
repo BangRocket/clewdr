@@ -421,3 +421,68 @@ export async function pruneUsage(): Promise<PruneStats> {
   }
   return response.json();
 }
+
+// === Codex auth endpoints (/api/codex/auth) ===
+
+import type { CodexAuthSummary } from "../types/codex.types";
+
+/**
+ * GET /api/codex/auth — list configured Codex credentials.
+ */
+export async function listCodexAuth(): Promise<CodexAuthSummary[]> {
+  const response = await fetch("/api/codex/auth", {
+    method: "GET",
+    headers: authHeaders(),
+  });
+  if (!response.ok) {
+    throw new Error(`Error ${response.status}: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+/**
+ * POST /api/codex/auth — register a new Codex credential.
+ *
+ * @param authJson Raw contents of `~/.codex/auth.json`
+ * @param label    Optional human-friendly label
+ *
+ * On 400 (parse failure) the server returns an error message in the body;
+ * we surface that text in the thrown Error so the form can render it inline.
+ */
+export async function addCodexAuth(
+  authJson: string,
+  label?: string,
+): Promise<CodexAuthSummary> {
+  const response = await fetch("/api/codex/auth", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ auth_json: authJson, label: label ?? null }),
+  });
+  if (response.status === 400) {
+    const body = await response.text();
+    throw new Error(body || "Invalid auth.json");
+  }
+  if (!response.ok) {
+    throw new Error(`Error ${response.status}: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+/**
+ * DELETE /api/codex/auth/{id} — remove a credential by id.
+ */
+export async function deleteCodexAuth(id: string): Promise<void> {
+  const response = await fetch(
+    `/api/codex/auth/${encodeURIComponent(id)}`,
+    {
+      method: "DELETE",
+      headers: authHeaders(),
+    },
+  );
+  if (response.status === 404) {
+    throw new Error("Credential not found");
+  }
+  if (!response.ok) {
+    throw new Error(`Error ${response.status}: ${response.statusText}`);
+  }
+}
