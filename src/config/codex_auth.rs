@@ -35,8 +35,8 @@ impl Default for CodexAuthStatus {
 }
 
 impl CodexAuth {
-    pub fn id_prefix(&self) -> &str {
-        &self.id[..self.id.len().min(8)]
+    pub fn id_prefix(&self) -> String {
+        self.id.chars().take(8).collect()
     }
 
     pub fn is_dispatchable(&self, now: i64) -> bool {

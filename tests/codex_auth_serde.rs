@@ -53,3 +53,21 @@ fn dispatchable_logic() {
     assert!(!a.is_dispatchable(100));
     assert!(a.is_dispatchable(300));
 }
+
+#[test]
+fn id_prefix_truncates_to_eight_chars_safely() {
+    let mut a = CodexAuth {
+        id: "abcdefghij".into(), label: None, id_token: "".into(),
+        access_token: "".into(), refresh_token: "".into(),
+        access_expires_at: 0, account_id: "".into(), plan: None,
+        status: CodexAuthStatus::Valid, last_used_at: None,
+    };
+    assert_eq!(a.id_prefix(), "abcdefgh");
+
+    a.id = "short".into();
+    assert_eq!(a.id_prefix(), "short");
+
+    // Multi-byte UTF-8 must not panic on byte-boundary slicing.
+    a.id = "αβγδεζηθικ".into(); // 10 chars, 20 bytes
+    assert_eq!(a.id_prefix(), "αβγδεζηθ");
+}
