@@ -33,3 +33,23 @@ fn codex_auth_status_rate_limited_roundtrips() {
         other => panic!("wrong variant: {other:?}"),
     }
 }
+
+#[test]
+fn dispatchable_logic() {
+    let mut a = CodexAuth {
+        id: "x".into(), label: None, id_token: "".into(),
+        access_token: "".into(), refresh_token: "".into(),
+        access_expires_at: 0, account_id: "".into(), plan: None,
+        status: CodexAuthStatus::Valid, last_used_at: None,
+    };
+    assert!(a.is_dispatchable(100));
+    a.status = CodexAuthStatus::Banned;
+    assert!(!a.is_dispatchable(100));
+    a.status = CodexAuthStatus::Invalid;
+    assert!(!a.is_dispatchable(100));
+    a.status = CodexAuthStatus::Expired;
+    assert!(a.is_dispatchable(100));
+    a.status = CodexAuthStatus::RateLimited { until: 200 };
+    assert!(!a.is_dispatchable(100));
+    assert!(a.is_dispatchable(300));
+}
