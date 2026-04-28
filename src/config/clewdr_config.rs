@@ -51,6 +51,15 @@ fn generate_password() -> String {
     pg.generate_one().unwrap()
 }
 
+/// Selects which backend serves the bare `/v1/chat/completions` endpoint.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum OaiBackend {
+    #[default]
+    Claude,
+    Codex,
+}
+
 /// A struct representing the configuration of the application
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ClewdrConfig {
@@ -61,6 +70,10 @@ pub struct ClewdrConfig {
     pub codex_auth: Vec<CodexAuth>,
     #[serde(default)]
     pub wasted_cookie: HashSet<UselessCookie>,
+
+    // Backend dispatch toggle for `/v1/chat/completions`
+    #[serde(default)]
+    pub default_oai_backend: OaiBackend,
 
     // Server settings, cannot hot reload
     #[serde(default = "default_ip")]
@@ -152,6 +165,7 @@ impl Default for ClewdrConfig {
             cookie_array: HashSet::new(),
             codex_auth: Vec::new(),
             wasted_cookie: HashSet::new(),
+            default_oai_backend: OaiBackend::Claude,
             password: String::new(),
             admin_password: String::new(),
             proxy: None,

@@ -1,15 +1,18 @@
 use axum::{
     Router,
-    extract::DefaultBodyLimit,
+    body::Body,
+    extract::{DefaultBodyLimit, Request, State},
     http::Method,
     middleware::{from_extractor, map_response},
+    response::Response,
     routing::{delete, get, post},
 };
-use tower::ServiceBuilder;
+use tower::{ServiceBuilder, ServiceExt};
 use tower_http::{compression::CompressionLayer, cors::CorsLayer};
 
 use crate::{
     api::*,
+    config::{CLEWDR_CONFIG, OaiBackend},
     middleware::{
         RequireAdminAuth, RequireBearerAuth, RequireFlexibleAuth,
         claude::{add_usage_info, apply_stop_sequences, check_overloaded, to_oai},
@@ -62,6 +65,7 @@ impl RouterBuilder {
             .route_claude_code_oai_endpoints()
             .route_codex_oai_endpoints()
             .route_codex_admin_endpoints()
+            .route_oai_dispatcher_endpoint()
             .setup_static_serving()
             .with_tower_trace()
             .with_cors()
@@ -144,10 +148,14 @@ impl RouterBuilder {
         self
     }
 
-    /// Sets up routes for OpenAI compatible endpoints
+    /// Sets up routes for OpenAI compatible endpoints (Claude web).
+    ///
+    /// Note: `/v1/chat/completions` is intentionally NOT registered here. It is
+    /// served by [`Self::route_oai_dispatcher_endpoint`], which forwards to either
+    /// the Claude OAI pipeline or the Codex pipeline based on
+    /// [`crate::config::ClewdrConfig::default_oai_backend`].
     fn route_claude_web_oai_endpoints(mut self) -> Self {
         let router = Router::new()
-            .route("/v1/chat/completions", post(api_claude_web))
             .route("/v1/models", get(api_get_models))
             .layer(
                 ServiceBuilder::new()
@@ -158,6 +166,50 @@ impl RouterBuilder {
                     .layer(map_response(check_overloaded)),
             )
             .with_state(self.claude_providers.web());
+        self.inner = self.inner.merge(router);
+        self
+    }
+
+    /// Builds the dispatcher route that serves the bare `/v1/chat/completions`
+    /// endpoint. At request time, it consults
+    /// [`crate::config::ClewdrConfig::default_oai_backend`] and forwards the
+    /// request to either the Claude OAI sub-router or the Codex sub-router.
+    ///
+    /// Both sub-routers are pre-built here (mounted at `/v1/chat/completions`)
+    /// with the same layer chains used by the dedicated path-based routes, so
+    /// behavior matches `/v1/messages` (via OAI) and `/codex/v1/chat/completions`
+    /// respectively. Bearer auth is enforced once on the dispatcher itself.
+    fn route_oai_dispatcher_endpoint(mut self) -> Self {
+        // Claude OAI sub-router: same layer chain as `route_claude_web_oai_endpoints`
+        // minus the bearer auth (applied by the outer dispatcher).
+        let claude_inner: Router = Router::new()
+            .route("/v1/chat/completions", post(api_claude_web))
+            .layer(
+                ServiceBuilder::new()
+                    .layer(CompressionLayer::new())
+                    .layer(map_response(to_oai))
+                    .layer(map_response(apply_stop_sequences))
+                    .layer(map_response(check_overloaded)),
+            )
+            .with_state(self.claude_providers.web());
+
+        // Codex sub-router: same layer chain as `route_codex_oai_endpoints` minus
+        // the bearer auth.
+        let codex_inner: Router = Router::new()
+            .route("/v1/chat/completions", post(api_codex_chat))
+            .layer(ServiceBuilder::new().layer(CompressionLayer::new()))
+            .with_state(self.codex_provider.clone());
+
+        let dispatch_state = OaiDispatchState {
+            claude_inner,
+            codex_inner,
+        };
+
+        let router = Router::new()
+            .route("/v1/chat/completions", post(oai_dispatch_handler))
+            .layer(from_extractor::<RequireBearerAuth>())
+            .with_state(dispatch_state);
+
         self.inner = self.inner.merge(router);
         self
     }
@@ -258,5 +310,31 @@ impl RouterBuilder {
     /// Finalizes the router configuration for use with axum
     pub fn build(self) -> Router {
         self.inner.layer(DefaultBodyLimit::max(32 * 1024 * 1024))
+    }
+}
+
+/// State for [`oai_dispatch_handler`] containing both pre-built sub-routers.
+#[derive(Clone)]
+struct OaiDispatchState {
+    claude_inner: Router,
+    codex_inner: Router,
+}
+
+/// Handler for the dispatched `/v1/chat/completions` route.
+///
+/// Reads `default_oai_backend` from the live config and forwards the request
+/// (unchanged) to whichever inner Router was selected.
+async fn oai_dispatch_handler(
+    State(state): State<OaiDispatchState>,
+    request: Request<Body>,
+) -> Response {
+    let backend = CLEWDR_CONFIG.load().default_oai_backend;
+    let inner = match backend {
+        OaiBackend::Claude => state.claude_inner,
+        OaiBackend::Codex => state.codex_inner,
+    };
+    match inner.oneshot(request).await {
+        Ok(resp) => resp,
+        Err(infallible) => match infallible {},
     }
 }

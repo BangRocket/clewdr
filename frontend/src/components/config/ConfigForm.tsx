@@ -46,6 +46,44 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ config, onChange }) => {
         </div>
       </ConfigSection>
 
+      {/* OAI Backend Toggle Section */}
+      <ConfigSection
+        title={t("config.sections.oaiBackend.title")}
+        description={t("config.sections.oaiBackend.description")}
+      >
+        <div className="flex flex-col gap-2">
+          <label className="text-sm text-white/80">
+            {t("config.sections.oaiBackend.label")}
+          </label>
+          <div className="flex gap-6">
+            <label className="flex items-center gap-2 text-sm text-white/90 cursor-pointer">
+              <input
+                type="radio"
+                name="default_oai_backend"
+                value="claude"
+                checked={
+                  (config.default_oai_backend ?? "claude") === "claude"
+                }
+                onChange={onChange}
+                className="h-4 w-4 accent-cyan-500"
+              />
+              {t("config.sections.oaiBackend.claude")}
+            </label>
+            <label className="flex items-center gap-2 text-sm text-white/90 cursor-pointer">
+              <input
+                type="radio"
+                name="default_oai_backend"
+                value="codex"
+                checked={config.default_oai_backend === "codex"}
+                onChange={onChange}
+                className="h-4 w-4 accent-cyan-500"
+              />
+              {t("config.sections.oaiBackend.codex")}
+            </label>
+          </div>
+        </div>
+      </ConfigSection>
+
       {/* App Settings Section */}
       <ConfigSection title={t("config.sections.app.title")}>
         <div className="flex space-x-6">
