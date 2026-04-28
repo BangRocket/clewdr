@@ -111,13 +111,30 @@ impl CodexState {
                 return Ok(response);
             }
 
-            // Non-success — classify status, mark cred, rotate.
+            // Non-success — classify, peek at body for diagnostics, decide
+            // whether to retry or fail-fast.
             self.classify_and_mark(status, &resp);
+            let body_snippet = read_body_snippet(resp).await;
+            warn!(
+                "codex upstream {} (attempt {}): {}",
+                status.as_u16(),
+                attempt + 1,
+                body_snippet
+            );
             self.return_auth().await;
             last_err = Some(ClewdrError::CodexError {
                 loc: Location::generate(),
-                msg: format!("codex upstream returned {}", status.as_u16()),
+                msg: format!("codex upstream {}: {body_snippet}", status.as_u16()),
             });
+
+            // 4xx other than auth/rate-limit means the request itself is bad
+            // (unsupported model, bad params, etc). Retrying with another cred
+            // won't help — fail fast with the body the user can act on.
+            let code = status.as_u16();
+            let retryable_4xx = matches!(code, 401 | 403 | 429);
+            if (400..500).contains(&code) && !retryable_4xx {
+                break;
+            }
         }
 
         Err(last_err.unwrap_or(ClewdrError::CodexError {
@@ -249,5 +266,23 @@ fn sanitize_codex_body(value: &mut serde_json::Value) {
                 .map(|t| t != "item_reference")
                 .unwrap_or(true)
         });
+    }
+}
+
+/// Drain a non-success response body and return a short, human-readable
+/// snippet for logs and error messages. Caps at 512 bytes; replaces newlines
+/// with spaces so it fits one line. Falls back to a placeholder on read error.
+async fn read_body_snippet(resp: wreq::Response) -> String {
+    match resp.bytes().await {
+        Ok(bytes) => {
+            let text = String::from_utf8_lossy(&bytes);
+            let trimmed = text.trim();
+            let mut snippet: String = trimmed.chars().take(512).collect();
+            if trimmed.chars().count() > 512 {
+                snippet.push('…');
+            }
+            snippet.replace(['\n', '\r'], " ")
+        }
+        Err(e) => format!("<failed to read body: {e}>"),
     }
 }
