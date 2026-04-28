@@ -113,6 +113,99 @@ async fn rotates_on_401_and_succeeds_on_second_cred() {
 }
 
 #[tokio::test]
+async fn streams_codex_tool_call_events_into_oai_tool_call_chunks() {
+    let api = MockServer::start().await;
+    // Simulate a real Codex tool-call SSE turn:
+    //   reasoning at output_index=0,
+    //   function_call at output_index=1 with two argument deltas + done,
+    //   completion.
+    let sse_body = concat!(
+        // reasoning (must be dropped)
+        "event: response.output_item.added\n",
+        "data: {\"type\":\"response.output_item.added\",\"item\":{\"id\":\"rs_1\",\"type\":\"reasoning\",\"summary\":[]},\"output_index\":0,\"sequence_number\":2}\n\n",
+        // function_call introduce
+        "event: response.output_item.added\n",
+        "data: {\"type\":\"response.output_item.added\",\"item\":{\"id\":\"fc_1\",\"type\":\"function_call\",\"status\":\"in_progress\",\"arguments\":\"\",\"call_id\":\"call_RQwYK\",\"name\":\"read_text_file\"},\"output_index\":1,\"sequence_number\":4}\n\n",
+        // arguments deltas
+        "event: response.function_call_arguments.delta\n",
+        "data: {\"type\":\"response.function_call_arguments.delta\",\"delta\":\"{\\\"head\\\":80,\",\"item_id\":\"fc_1\",\"output_index\":1,\"sequence_number\":5}\n\n",
+        "event: response.function_call_arguments.delta\n",
+        "data: {\"type\":\"response.function_call_arguments.delta\",\"delta\":\"\\\"path\\\":\\\"x\\\"}\",\"item_id\":\"fc_1\",\"output_index\":1,\"sequence_number\":6}\n\n",
+        // arguments done (must NOT double-emit content)
+        "event: response.function_call_arguments.done\n",
+        "data: {\"type\":\"response.function_call_arguments.done\",\"arguments\":\"{\\\"head\\\":80,\\\"path\\\":\\\"x\\\"}\",\"item_id\":\"fc_1\",\"output_index\":1,\"sequence_number\":7}\n\n",
+        // completion
+        "event: response.completed\n",
+        "data: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":10,\"output_tokens\":5}}}\n\n",
+    );
+
+    Mock::given(method("POST"))
+        .and(path("/responses"))
+        .and(header("authorization", "Bearer valid-at"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(sse_body),
+        )
+        .mount(&api)
+        .await;
+
+    let actor = CodexAuthActorHandle::start_with(vec![auth_for_test()])
+        .await
+        .unwrap();
+    let mut state = CodexState::new(actor);
+    state.api_base = api.uri();
+    state.stream = true;
+
+    let req = serde_json::from_value::<clewdr::types::oai::CreateMessageParams>(
+        serde_json::json!({
+            "model": "gpt-5",
+            "messages": [{"role": "user", "content": "hi"}],
+            "stream": true
+        }),
+    )
+    .unwrap();
+    let response = state.try_chat(req).await.expect("response");
+
+    let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024)
+        .await
+        .unwrap();
+    let s = std::str::from_utf8(&bytes).unwrap();
+
+    // Parse out the data: lines (excluding [DONE]) so we can assert order.
+    let chunks: Vec<serde_json::Value> = s
+        .split("\n\n")
+        .filter_map(|frame| frame.strip_prefix("data: "))
+        .filter(|d| d.trim() != "[DONE]")
+        .filter_map(|d| serde_json::from_str(d.trim()).ok())
+        .collect();
+
+    // We expect: tool-call intro, args-delta, args-delta, completion (4 chunks).
+    assert_eq!(chunks.len(), 4, "got chunks: {chunks:?}\nraw stream: {s}");
+
+    // 1. intro
+    let intro = &chunks[0]["choices"][0]["delta"]["tool_calls"][0];
+    assert_eq!(intro["index"], 0);
+    assert_eq!(intro["id"], "call_RQwYK");
+    assert_eq!(intro["type"], "function");
+    assert_eq!(intro["function"]["name"], "read_text_file");
+
+    // 2-3. args streamed
+    let args1 = &chunks[1]["choices"][0]["delta"]["tool_calls"][0]["function"]["arguments"];
+    let args2 = &chunks[2]["choices"][0]["delta"]["tool_calls"][0]["function"]["arguments"];
+    assert_eq!(args1, r#"{"head":80,"#);
+    assert_eq!(args2, r#""path":"x"}"#);
+
+    // 4. completion: tool_calls finish_reason and usage.
+    assert_eq!(chunks[3]["choices"][0]["finish_reason"], "tool_calls");
+    assert_eq!(chunks[3]["usage"]["prompt_tokens"], 10);
+    assert_eq!(chunks[3]["usage"]["completion_tokens"], 5);
+
+    // [DONE] terminator present.
+    assert!(s.contains("[DONE]"));
+}
+
+#[tokio::test]
 async fn body_forces_stream_and_strips_unsupported_fields() {
     use wiremock::matchers::body_partial_json;
 

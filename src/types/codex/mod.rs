@@ -50,7 +50,27 @@ pub enum CodexSseEvent {
     #[serde(rename = "response.output_text.delta")]
     OutputTextDelta { delta: String },
     #[serde(rename = "response.output_item.added")]
-    OutputItemAdded { item: serde_json::Value },
+    OutputItemAdded {
+        item: serde_json::Value,
+        #[serde(default)]
+        output_index: u32,
+    },
+    #[serde(rename = "response.function_call_arguments.delta")]
+    FunctionCallArgumentsDelta {
+        delta: String,
+        #[serde(default)]
+        item_id: String,
+        #[serde(default)]
+        output_index: u32,
+    },
+    #[serde(rename = "response.function_call_arguments.done")]
+    FunctionCallArgumentsDone {
+        arguments: String,
+        #[serde(default)]
+        item_id: String,
+        #[serde(default)]
+        output_index: u32,
+    },
     #[serde(rename = "response.completed")]
     Completed { response: CodexFinalResponse },
     #[serde(rename = "response.error")]

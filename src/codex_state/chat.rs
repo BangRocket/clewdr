@@ -10,12 +10,13 @@ use tracing::{info, warn};
 use uuid::Uuid;
 use wreq::Method;
 
+use std::sync::{Arc, Mutex};
+
 use crate::{
     codex_state::{
         CodexState,
         transform::{
-            aggregate_codex_events, codex_event_to_oai_chunk,
-            translate_chat_completions_to_codex,
+            CodexStreamState, aggregate_codex_events, translate_chat_completions_to_codex,
         },
     },
     config::{CLEWDR_CONFIG, CodexAuthStatus},
@@ -177,15 +178,20 @@ impl CodexState {
         let created = chrono::Utc::now().timestamp();
         let stream = resp.bytes_stream().eventsource();
         let id_clone = id.clone();
-        let mapped = stream.filter_map(move |evt| {
+        // Stateful translator: tracks output_index -> tool_call index across
+        // events. Wrapped in Arc<Mutex<_>> so the per-event closure can mutate
+        // it without breaking Send bounds on the resulting stream.
+        let state = Arc::new(Mutex::new(CodexStreamState::new()));
+        let mapped = stream.flat_map(move |evt| {
             let id = id_clone.clone();
             let model = model.clone();
-            async move {
+            let state = Arc::clone(&state);
+            let chunks: Vec<Result<String, std::io::Error>> = (|| {
                 let evt = match evt {
                     Ok(e) => e,
                     Err(e) => {
                         tracing::debug!(target: "codex::sse_raw", "stream error: {e}");
-                        return None;
+                        return Vec::new();
                     }
                 };
                 tracing::debug!(
@@ -202,13 +208,19 @@ impl CodexState {
                             "failed to parse codex event: {e}; data={}",
                             truncate_for_log(&evt.data, 256)
                         );
-                        return None;
+                        return Vec::new();
                     }
                 };
-                let chunk = codex_event_to_oai_chunk(&parsed, &id, &model, created)?;
-                let json = serde_json::to_string(&chunk).ok()?;
-                Some(Ok::<_, std::io::Error>(format!("data: {json}\n\n")))
-            }
+                let mut guard = state.lock().expect("codex stream state mutex poisoned");
+                let oai_chunks = guard.handle_event(&parsed, &id, &model, created);
+                drop(guard);
+                oai_chunks
+                    .into_iter()
+                    .filter_map(|c| serde_json::to_string(&c).ok())
+                    .map(|json| Ok::<_, std::io::Error>(format!("data: {json}\n\n")))
+                    .collect()
+            })();
+            futures::stream::iter(chunks)
         });
 
         // Append SSE [DONE] terminator.
