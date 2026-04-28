@@ -68,7 +68,7 @@ fn maps_max_tokens_to_max_output_tokens() {
 }
 
 #[test]
-fn tools_pass_through_unchanged() {
+fn openai_function_tools_are_normalized_for_codex_responses() {
     let tools = serde_json::json!([
         {"type": "function", "function": {"name": "search", "description": "x", "parameters": {}}}
     ]);
@@ -81,8 +81,15 @@ fn tools_pass_through_unchanged() {
     });
     let oai: CreateMessageParams = serde_json::from_value(oai).unwrap();
     let codex = translate_chat_completions_to_codex(&oai).expect("translates");
-    // Tools deserialize through Claude's `Tool::Raw(Value)` arm and re-serialize via serde_json.
-    assert_eq!(codex.tools.len(), 1);
+    assert_eq!(
+        codex.tools,
+        vec![serde_json::json!({
+            "type": "function",
+            "name": "search",
+            "description": "x",
+            "parameters": {}
+        })]
+    );
     // tool_choice "auto" round-trips
     assert!(codex.tool_choice.is_some());
 }

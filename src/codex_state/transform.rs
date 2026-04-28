@@ -24,7 +24,10 @@ pub enum TranslateError {
     #[snafu(display("messages array is empty"))]
     NoMessages,
     #[snafu(display("upstream codex error: {message}{}", code.as_deref().map(|c| format!(" ({c})")).unwrap_or_default()))]
-    UpstreamError { message: String, code: Option<String> },
+    UpstreamError {
+        message: String,
+        code: Option<String>,
+    },
     #[snafu(display("codex stream ended without Completed event (truncated response)"))]
     IncompleteStream,
 }
@@ -76,7 +79,8 @@ pub fn translate_chat_completions_to_codex(
         Some(system_parts.join("\n\n"))
     };
 
-    // Tools: pass through via serde_json. Drop Known (Anthropic-specific) tools.
+    // Tools: normalize Chat Completions function tools to Responses-style tools.
+    // Drop Known (Anthropic-specific) tools.
     let tools: Vec<serde_json::Value> = req
         .tools
         .as_ref()
@@ -87,7 +91,9 @@ pub fn translate_chat_completions_to_codex(
                         warn!("dropping Anthropic-specific tool in codex translation");
                         None
                     }
-                    Tool::Custom(_) | Tool::Raw(_) => serde_json::to_value(t).ok(),
+                    Tool::Custom(_) | Tool::Raw(_) => {
+                        serde_json::to_value(t).ok().and_then(normalize_codex_tool)
+                    }
                 })
                 .collect()
         })
@@ -112,6 +118,50 @@ pub fn translate_chat_completions_to_codex(
         text: None,
         stream: req.stream.unwrap_or(false),
     })
+}
+
+fn normalize_codex_tool(mut tool: serde_json::Value) -> Option<serde_json::Value> {
+    let Some(obj) = tool.as_object_mut() else {
+        warn!("dropping non-object tool in codex translation");
+        return None;
+    };
+
+    if obj.get("name").and_then(|v| v.as_str()).is_some() {
+        if let Some(input_schema) = obj.remove("input_schema") {
+            obj.entry("parameters".to_string()).or_insert(input_schema);
+        }
+        return Some(tool);
+    }
+
+    let Some(function) = obj.remove("function") else {
+        warn!("dropping tool without top-level name in codex translation");
+        return None;
+    };
+
+    let Some(function_obj) = function.as_object() else {
+        warn!("dropping function tool with non-object function payload in codex translation");
+        return None;
+    };
+
+    let Some(name) = function_obj.get("name").cloned() else {
+        warn!("dropping function tool without function.name in codex translation");
+        return None;
+    };
+
+    obj.insert(
+        "type".to_string(),
+        serde_json::Value::String("function".to_string()),
+    );
+    obj.insert("name".to_string(), name);
+    for key in ["description", "parameters", "strict"] {
+        if let Some(value) = function_obj.get(key).cloned() {
+            obj.insert(key.to_string(), value);
+        }
+    }
+    obj.entry("parameters".to_string())
+        .or_insert_with(|| serde_json::json!({}));
+
+    Some(tool)
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -220,7 +270,11 @@ pub fn aggregate_codex_events(
 ) -> Result<OaiCompletion, TranslateError> {
     let mut seen_completed = false;
     let mut content = String::new();
-    let mut usage = OaiUsage { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+    let mut usage = OaiUsage {
+        prompt_tokens: 0,
+        completion_tokens: 0,
+        total_tokens: 0,
+    };
     for ev in events {
         match ev {
             CodexSseEvent::OutputTextDelta { delta } => content.push_str(delta),
