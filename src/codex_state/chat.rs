@@ -1,0 +1,255 @@
+use axum::{
+    body::Body,
+    response::{IntoResponse, Response},
+};
+use eventsource_stream::Eventsource;
+use futures::StreamExt;
+use http::StatusCode;
+use snafu::{GenerateImplicitData, Location, ResultExt};
+use tracing::{info, warn};
+use uuid::Uuid;
+use wreq::Method;
+
+use crate::{
+    codex_state::{
+        CodexState,
+        transform::{
+            aggregate_codex_events, codex_event_to_oai_chunk,
+            translate_chat_completions_to_codex,
+        },
+    },
+    config::CodexAuthStatus,
+    error::{ClewdrError, WreqSnafu},
+    types::{codex::CodexSseEvent, oai::CreateMessageParams},
+};
+
+const RETRY_BUDGET: usize = 3;
+
+const CODEX_ORIGINATOR: &str = "codex_cli_rs";
+const CODEX_OPENAI_BETA: &str = "responses=experimental";
+const CODEX_CLI_VERSION: &str = "0.21.0";
+
+impl CodexState {
+    pub async fn try_chat(
+        &mut self,
+        request: CreateMessageParams,
+    ) -> Result<Response, ClewdrError> {
+        // Translate OAI -> Codex Responses request.
+        let codex_body =
+            translate_chat_completions_to_codex(&request).map_err(|e| ClewdrError::CodexError {
+                loc: Location::generate(),
+                msg: format!("codex translate: {e}"),
+            })?;
+
+        // Convert to JSON Value so we can apply Codex-specific sanitization.
+        let mut value =
+            serde_json::to_value(&codex_body).map_err(|e| ClewdrError::CodexError {
+                loc: Location::generate(),
+                msg: format!("serialize codex request: {e}"),
+            })?;
+        sanitize_codex_body(&mut value);
+
+        let model = request.model.clone();
+        let client_wants_stream = request.stream.unwrap_or(false);
+        // Track whether the client wants streaming output; upstream is always streamed.
+        self.stream = client_wants_stream;
+
+        // Single source UUIDs per request — reused across retries.
+        let session_id = Uuid::new_v4().to_string();
+        let conversation_id = Uuid::new_v4().to_string();
+
+        let mut last_err: Option<ClewdrError> = None;
+        for attempt in 0..RETRY_BUDGET {
+            let auth = self.request_auth().await?;
+            info!(
+                "[REQ] codex stream={} model={} cred={} attempt={}",
+                client_wants_stream,
+                model,
+                auth.id_prefix(),
+                attempt + 1,
+            );
+
+            // Refresh if the access token is near expiry.
+            if let Err(e) = self.ensure_fresh_access_token().await {
+                warn!("codex refresh failed (attempt {}): {}", attempt + 1, e);
+                self.return_auth().await;
+                last_err = Some(e);
+                continue;
+            }
+
+            let url = format!("{}/responses", self.api_base.trim_end_matches('/'));
+            let resp = self
+                .build_request(Method::POST, &url)
+                .header("session_id", session_id.as_str())
+                .header("conversation_id", conversation_id.as_str())
+                .header("originator", CODEX_ORIGINATOR)
+                .header("openai-beta", CODEX_OPENAI_BETA)
+                .header("version", CODEX_CLI_VERSION)
+                .json(&value)
+                .send()
+                .await
+                .context(WreqSnafu {
+                    msg: "codex POST /responses",
+                });
+
+            let resp = match resp {
+                Ok(r) => r,
+                Err(e) => {
+                    warn!("codex network error (attempt {}): {}", attempt + 1, e);
+                    self.return_auth().await;
+                    last_err = Some(e);
+                    continue;
+                }
+            };
+
+            let status = resp.status();
+            if status.is_success() {
+                let response = if client_wants_stream {
+                    self.stream_to_oai(resp, model.clone()).await?
+                } else {
+                    self.aggregate_to_oai(resp, model.clone()).await?
+                };
+                self.return_auth().await;
+                return Ok(response);
+            }
+
+            // Non-success — classify status, mark cred, rotate.
+            self.classify_and_mark(status, &resp);
+            self.return_auth().await;
+            last_err = Some(ClewdrError::CodexError {
+                loc: Location::generate(),
+                msg: format!("codex upstream returned {}", status.as_u16()),
+            });
+        }
+
+        Err(last_err.unwrap_or(ClewdrError::CodexError {
+            loc: Location::generate(),
+            msg: "codex retry budget exhausted with no error".to_string(),
+        }))
+    }
+
+    fn classify_and_mark(&mut self, status: StatusCode, resp: &wreq::Response) {
+        let new_status = match status.as_u16() {
+            401 => CodexAuthStatus::Invalid,
+            403 => CodexAuthStatus::Banned,
+            429 => {
+                let retry_after = resp
+                    .headers()
+                    .get("retry-after")
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|s| s.parse::<i64>().ok())
+                    .unwrap_or(60);
+                CodexAuthStatus::RateLimited {
+                    until: chrono::Utc::now().timestamp() + retry_after,
+                }
+            }
+            _ => return, // 5xx and others: just rotate without status change
+        };
+        if let Some(auth) = self.auth.as_mut() {
+            auth.status = new_status;
+        }
+    }
+
+    async fn stream_to_oai(
+        &self,
+        resp: wreq::Response,
+        model: String,
+    ) -> Result<Response, ClewdrError> {
+        let id = format!("chatcmpl-{}", Uuid::new_v4());
+        let created = chrono::Utc::now().timestamp();
+        let stream = resp.bytes_stream().eventsource();
+        let id_clone = id.clone();
+        let mapped = stream.filter_map(move |evt| {
+            let id = id_clone.clone();
+            let model = model.clone();
+            async move {
+                let evt = evt.ok()?;
+                let parsed: CodexSseEvent = serde_json::from_str(&evt.data).ok()?;
+                let chunk = codex_event_to_oai_chunk(&parsed, &id, &model, created)?;
+                let json = serde_json::to_string(&chunk).ok()?;
+                Some(Ok::<_, std::io::Error>(format!("data: {json}\n\n")))
+            }
+        });
+
+        // Append SSE [DONE] terminator.
+        let done = futures::stream::once(async {
+            Ok::<_, std::io::Error>("data: [DONE]\n\n".to_string())
+        });
+        let combined = mapped.chain(done);
+
+        let body = Body::from_stream(combined);
+        let mut response = Response::new(body);
+        response
+            .headers_mut()
+            .insert("content-type", "text/event-stream".parse().unwrap());
+        Ok(response)
+    }
+
+    async fn aggregate_to_oai(
+        &self,
+        resp: wreq::Response,
+        model: String,
+    ) -> Result<Response, ClewdrError> {
+        let bytes = resp.bytes().await.context(WreqSnafu {
+            msg: "codex body",
+        })?;
+        let text = std::str::from_utf8(&bytes).map_err(|_| ClewdrError::CodexError {
+            loc: Location::generate(),
+            msg: "non-utf8 codex body".to_string(),
+        })?;
+        let mut events: Vec<CodexSseEvent> = Vec::new();
+        for chunk in text.split("\n\n") {
+            for line in chunk.lines() {
+                if let Some(data) = line.strip_prefix("data: ") {
+                    let trimmed = data.trim();
+                    if trimmed == "[DONE]" {
+                        continue;
+                    }
+                    if let Ok(ev) = serde_json::from_str::<CodexSseEvent>(trimmed) {
+                        events.push(ev);
+                    }
+                }
+            }
+        }
+        let id = format!("chatcmpl-{}", Uuid::new_v4());
+        let oai = aggregate_codex_events(&events, &id, &model).map_err(|e| {
+            ClewdrError::CodexError {
+                loc: Location::generate(),
+                msg: format!("aggregate: {e}"),
+            }
+        })?;
+        let body = serde_json::to_vec(&oai).unwrap();
+        Ok((
+            StatusCode::OK,
+            [(http::header::CONTENT_TYPE, "application/json")],
+            body,
+        )
+            .into_response())
+    }
+}
+
+fn sanitize_codex_body(value: &mut serde_json::Value) {
+    let Some(obj) = value.as_object_mut() else {
+        return;
+    };
+    obj.insert("stream".to_string(), serde_json::Value::Bool(true));
+    obj.insert("store".to_string(), serde_json::Value::Bool(false));
+    for k in [
+        "max_output_tokens",
+        "max_completion_tokens",
+        "max_tokens",
+        "temperature",
+        "metadata",
+    ] {
+        obj.remove(k);
+    }
+    if let Some(input) = obj.get_mut("input").and_then(|v| v.as_array_mut()) {
+        input.retain(|item| {
+            item.as_object()
+                .and_then(|o| o.get("type"))
+                .and_then(|t| t.as_str())
+                .map(|t| t != "item_reference")
+                .unwrap_or(true)
+        });
+    }
+}
