@@ -37,14 +37,21 @@ fn extracts_system_messages_into_instructions() {
 }
 
 #[test]
-fn rejects_unknown_model() {
-    let oai = serde_json::json!({
-        "model": "fake-model-xyz",
-        "messages": [{"role": "user", "content": "hi"}],
-        "stream": false
-    });
-    let oai: CreateMessageParams = serde_json::from_value(oai).unwrap();
-    assert!(translate_chat_completions_to_codex(&oai).is_err());
+fn passes_through_arbitrary_model_names() {
+    // Translator no longer enforces a whitelist — upstream Codex decides
+    // what's supported. Models like `gpt-5.5` that didn't exist when this
+    // proxy was first written should pass through unchanged.
+    for model in ["gpt-5.5", "gpt-5.3-codex", "fake-model-xyz"] {
+        let oai = serde_json::json!({
+            "model": model,
+            "messages": [{"role": "user", "content": "hi"}],
+            "stream": false
+        });
+        let oai: CreateMessageParams = serde_json::from_value(oai).unwrap();
+        let codex = translate_chat_completions_to_codex(&oai)
+            .unwrap_or_else(|e| panic!("model `{model}` should pass through: {e}"));
+        assert_eq!(codex.model, model);
+    }
 }
 
 #[test]

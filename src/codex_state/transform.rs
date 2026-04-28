@@ -5,8 +5,14 @@ use serde::Serialize;
 use snafu::Snafu;
 use tracing::warn;
 
+/// Models advertised on `/codex/v1/models`. The translator no longer enforces
+/// this list — clients may send any model name and upstream Codex will reject
+/// unsupported ones. Keeping the list as advertising/documentation only.
 pub const CODEX_MODELS: &[&str] = &[
+    "gpt-5.5",
     "gpt-5-codex",
+    "gpt-5.3-codex",
+    "gpt-5.2-codex",
     "gpt-5",
     "gpt-4.1",
     "o3",
@@ -15,8 +21,6 @@ pub const CODEX_MODELS: &[&str] = &[
 
 #[derive(Debug, Snafu)]
 pub enum TranslateError {
-    #[snafu(display("model `{model}` is not supported by Codex; valid: {valid}"))]
-    UnknownModel { model: String, valid: String },
     #[snafu(display("messages array is empty"))]
     NoMessages,
     #[snafu(display("upstream codex error: {message}{}", code.as_deref().map(|c| format!(" ({c})")).unwrap_or_default()))]
@@ -45,12 +49,6 @@ fn extract_text(msg: &Message) -> String {
 pub fn translate_chat_completions_to_codex(
     req: &CreateMessageParams,
 ) -> Result<CodexRequest, TranslateError> {
-    if !CODEX_MODELS.iter().any(|m| *m == req.model) {
-        return Err(TranslateError::UnknownModel {
-            model: req.model.clone(),
-            valid: CODEX_MODELS.join(", "),
-        });
-    }
     if req.messages.is_empty() {
         return Err(TranslateError::NoMessages);
     }
