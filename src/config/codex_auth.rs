@@ -1,3 +1,4 @@
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -46,4 +47,46 @@ impl CodexAuth {
             CodexAuthStatus::Invalid | CodexAuthStatus::Banned => false,
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct CodexIdTokenClaims {
+    pub account_id: String,
+    pub plan: Option<String>,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum CodexJwtError {
+    #[error("expected 3 segments, got {0}")]
+    Segments(usize),
+    #[error("base64 decode failed: {0}")]
+    Base64(#[from] base64::DecodeError),
+    #[error("json parse failed: {0}")]
+    Json(#[from] serde_json::Error),
+    #[error("missing chatgpt_account_id claim")]
+    MissingAccountId,
+}
+
+pub fn decode_codex_id_token_claims(token: &str) -> Result<CodexIdTokenClaims, CodexJwtError> {
+    let segments: Vec<&str> = token.split('.').collect();
+    if segments.len() != 3 {
+        return Err(CodexJwtError::Segments(segments.len()));
+    }
+    let payload_bytes = URL_SAFE_NO_PAD.decode(segments[1])?;
+    let v: serde_json::Value = serde_json::from_slice(&payload_bytes)?;
+
+    let auth_obj = v
+        .get("https://api.openai.com/auth")
+        .and_then(|x| x.as_object());
+    let account_id = auth_obj
+        .and_then(|m| m.get("chatgpt_account_id"))
+        .and_then(|x| x.as_str())
+        .ok_or(CodexJwtError::MissingAccountId)?
+        .to_string();
+    let plan = auth_obj
+        .and_then(|m| m.get("chatgpt_plan_type"))
+        .and_then(|x| x.as_str())
+        .map(str::to_string);
+
+    Ok(CodexIdTokenClaims { account_id, plan })
 }
