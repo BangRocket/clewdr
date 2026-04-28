@@ -92,6 +92,10 @@ pub enum ClewdrError {
     InvalidHeaderValue { source: InvalidHeaderValue },
     #[snafu(display("Bad request: {}", msg))]
     BadRequest { msg: &'static str },
+    #[snafu(display("Bad input: {}", msg))]
+    BadInput { msg: String },
+    #[snafu(display("Not found: {}", msg))]
+    NotFound { msg: String },
     #[snafu(display("Retries exceeded"))]
     TooManyRetries,
     #[snafu(display("EventSource error: {}", source))]
@@ -215,6 +219,8 @@ impl IntoResponse for ClewdrError {
             ClewdrError::PathNotFound { .. } => (StatusCode::NOT_FOUND, json!(self.to_string())),
             ClewdrError::InvalidAuth => (StatusCode::UNAUTHORIZED, json!(self.to_string())),
             ClewdrError::BadRequest { .. } => (StatusCode::BAD_REQUEST, json!(self.to_string())),
+            ClewdrError::BadInput { ref msg } => (StatusCode::BAD_REQUEST, json!(msg)),
+            ClewdrError::NotFound { ref msg } => (StatusCode::NOT_FOUND, json!(msg)),
             ClewdrError::InvalidHeaderValue { .. } => {
                 (StatusCode::BAD_REQUEST, json!(self.to_string()))
             }

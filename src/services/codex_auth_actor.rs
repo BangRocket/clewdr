@@ -115,8 +115,8 @@ impl Actor for CodexAuthActor {
                     Self::persist(state);
                     reply.send(Ok(()))?;
                 } else {
-                    reply.send(Err(ClewdrError::UnexpectedNone {
-                        msg: "codex auth id not found in pool",
+                    reply.send(Err(ClewdrError::NotFound {
+                        msg: "codex auth id not found in pool".to_string(),
                     }))?;
                 }
             }

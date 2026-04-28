@@ -1,5 +1,6 @@
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
+use axum::response::IntoResponse;
 use clewdr::api::codex::{
     AddCodexAuthBody, api_codex_add, api_codex_delete, api_codex_list,
 };
@@ -41,4 +42,39 @@ async fn admin_add_then_list_then_delete() {
 
     let list = api_codex_list(State(handle)).await.expect("list");
     assert_eq!(list.0.len(), 0);
+}
+
+#[tokio::test]
+async fn add_with_malformed_auth_json_is_400() {
+    let handle = CodexAuthActorHandle::start_with(vec![]).await.unwrap();
+
+    let result = api_codex_add(
+        State(handle),
+        axum::Json(AddCodexAuthBody {
+            auth_json: "not valid json".into(),
+            label: None,
+        }),
+    )
+    .await;
+
+    let err = match result {
+        Ok(_) => panic!("expected malformed auth.json to fail"),
+        Err(e) => e,
+    };
+    let response = err.into_response();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn delete_unknown_id_is_404() {
+    let handle = CodexAuthActorHandle::start_with(vec![]).await.unwrap();
+
+    let result = api_codex_delete(State(handle), Path("does-not-exist".into())).await;
+
+    let err = match result {
+        Ok(_) => panic!("expected delete of unknown id to fail"),
+        Err(e) => e,
+    };
+    let response = err.into_response();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }

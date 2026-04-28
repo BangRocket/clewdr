@@ -7,8 +7,6 @@ use axum::{
     response::IntoResponse,
 };
 use serde::{Deserialize, Serialize};
-use snafu::{GenerateImplicitData, Location};
-
 use crate::{
     codex_state::transform::CODEX_MODELS,
     config::{CodexAuth, CodexAuthStatus},
@@ -102,8 +100,7 @@ pub async fn api_codex_add(
     Json(body): Json<AddCodexAuthBody>,
 ) -> Result<(StatusCode, Json<CodexAuthSummary>), ClewdrError> {
     let auth = CodexAuth::from_auth_json(&body.auth_json, body.label).map_err(|e| {
-        ClewdrError::CodexError {
-            loc: Location::generate(),
+        ClewdrError::BadInput {
             msg: format!("auth.json parse: {e}"),
         }
     })?;
