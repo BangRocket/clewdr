@@ -1,8 +1,7 @@
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 
-const CODEX_OAUTH_CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
-const CODEX_USER_AGENT: &str = "Codex-Code/1.0.43";
+use crate::config::{CODEX_OAUTH_CLIENT_ID, CODEX_USER_AGENT};
 
 #[derive(Debug, Snafu)]
 pub enum RefreshError {
