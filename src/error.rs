@@ -113,6 +113,8 @@ pub enum ClewdrError {
     CookieDispatchError { source: oneshot::error::RecvError },
     #[snafu(display("No cookie available"))]
     NoCookieAvailable,
+    #[snafu(display("No codex auth available"))]
+    NoCodexAuthAvailable,
     #[snafu(display("Invalid Cookie: {}", reason))]
     #[snafu(context(false))]
     InvalidCookie {
