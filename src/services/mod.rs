@@ -1,3 +1,4 @@
+pub mod codex_auth_actor;
 pub mod cookie_actor;
 pub mod pricing;
 #[cfg(feature = "portable")]

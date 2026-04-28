@@ -25,6 +25,7 @@ It keeps resource usage low, serves OpenAI-style endpoints, and ships with a sma
 | Claude.ai OpenAI compatible | `http://127.0.0.1:8484/v1/chat/completions` |
 | Claude Code | `http://127.0.0.1:8484/code/v1/messages` |
 | Claude Code OpenAI compatible | `http://127.0.0.1:8484/code/v1/chat/completions` |
+| Codex (OpenAI-compatible) | `http://127.0.0.1:8484/codex/v1/chat/completions` |
 
 Streaming responses work on every endpoint.
 
@@ -73,6 +74,40 @@ Sample event line in `history/<sha>.jsonl`:
 1. Export your Claude.ai cookies (e.g., via browser devtools).  
 2. Paste them into the Claude tab; ClewdR tracks their status automatically.  
 3. Optionally set an outbound proxy or fingerprint overrides if Claude blocks your region.
+
+### Codex
+
+ClewdR can route requests to OpenAI's Codex backend using OAuth tokens minted by the official `codex` CLI.
+
+1. On a machine with a browser, install the [Codex CLI](https://github.com/openai/codex) and run `codex login`.
+2. Open `~/.codex/auth.json` and copy its full contents.
+3. In the ClewdR admin UI, open the **Codex** tab, paste the JSON into the "Add" form, give it an optional label, and submit.
+
+ClewdR auto-refreshes access tokens on each request when within 60s of expiry; no further action needed unless the refresh token is revoked (re-run `codex login` and re-paste).
+
+Endpoint: `POST http://127.0.0.1:8484/codex/v1/chat/completions` (OpenAI-compatible).
+
+Supported models: `gpt-5-codex`, `gpt-5`, `gpt-4.1`, `o3`, `o4-mini`. (Codex's upstream may map these to internal model names like `gpt-5.3-codex`; pass-through behavior.)
+
+Example client (curl):
+
+```bash
+curl http://127.0.0.1:8484/codex/v1/chat/completions \
+  -H "Authorization: Bearer password-from-console" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-5",
+    "messages": [{"role": "user", "content": "hello"}],
+    "stream": true
+  }'
+```
+
+Status badges in the admin UI:
+- **valid**: ready for dispatch
+- **rate-limited**: backed off until upstream Retry-After expires
+- **expired**: refresh failed transiently (will be retried)
+- **invalid**: refresh token rejected (re-run `codex login`)
+- **banned**: account-level ban (cannot be recovered without OpenAI intervention)
 
 ## Client Examples
 

@@ -23,7 +23,7 @@ use super::{CONFIG_PATH, ENDPOINT_URL};
 use crate::{
     Args,
     config::{
-        CC_CLIENT_ID, CookieStatus, UselessCookie, default_check_update, default_ip,
+        CC_CLIENT_ID, CodexAuth, CookieStatus, UselessCookie, default_check_update, default_ip,
         default_max_retries, default_port, default_skip_cool_down, default_use_real_roles,
     },
     error::ClewdrError,
@@ -57,6 +57,8 @@ pub struct ClewdrConfig {
     // key configurations
     #[serde(default)]
     pub cookie_array: HashSet<CookieStatus>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub codex_auth: Vec<CodexAuth>,
     #[serde(default)]
     pub wasted_cookie: HashSet<UselessCookie>,
 
@@ -148,6 +150,7 @@ impl Default for ClewdrConfig {
             check_update: default_check_update(),
             auto_update: false,
             cookie_array: HashSet::new(),
+            codex_auth: Vec::new(),
             wasted_cookie: HashSet::new(),
             password: String::new(),
             admin_password: String::new(),

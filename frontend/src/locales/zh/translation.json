@@ -24,6 +24,7 @@
   },
   "tabs": {
     "claude": "Claude",
+    "codex": "Codex",
     "usage": "用量",
     "config": "配置",
     "auth": "认证"
@@ -85,6 +86,27 @@
   "claudeTab": {
     "submit": "提交Cookie",
     "status": "Cookie状态"
+  },
+  "codexTab": {
+    "add": "添加",
+    "list": "凭据"
+  },
+  "codexAdd": {
+    "labelField": "标签（可选）",
+    "labelPlaceholder": "例如：个人账号",
+    "authJsonField": "auth.json 内容",
+    "authJsonPlaceholder": "{\n  \"tokens\": { \"id_token\": \"...\", \"access_token\": \"...\", \"refresh_token\": \"...\" }\n}",
+    "help": "在本地运行 `codex login` 后，将 ~/.codex/auth.json 的内容粘贴到上方。",
+    "submit": "添加凭据",
+    "submitting": "添加中...",
+    "success": "已添加凭据 {{id}}",
+    "errorEmpty": "auth.json 不能为空"
+  },
+  "codexList": {
+    "empty": "尚未配置 Codex 凭据",
+    "delete": "删除",
+    "deleteConfirm": "确定要删除此凭据吗？",
+    "deleted": "凭据已删除"
   },
   "cookieSubmit": {
     "value": "Cookie值",

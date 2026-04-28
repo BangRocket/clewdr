@@ -21,6 +21,10 @@ pub const CC_REDIRECT_URI: &str = "https://console.anthropic.com/oauth/code/call
 pub const CLAUDE_CODE_VERSION: &str = "2.1.76";
 pub const CLAUDE_CODE_USER_AGENT: &str = "claude-code/2.1.76";
 pub const CLAUDE_CODE_BILLING_SALT: &str = "59cf53e54c78";
+pub const CODEX_OAUTH_CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
+pub const CODEX_OAUTH_BASE_URL: &str = "https://auth.openai.com";
+pub const CODEX_API_BASE_URL: &str = "https://chatgpt.com/backend-api/codex";
+pub const CODEX_USER_AGENT: &str = "Codex-Code/1.0.43";
 
 pub static ENDPOINT_URL: LazyLock<Url> = LazyLock::new(|| {
     Url::parse(CLAUDE_ENDPOINT).unwrap_or_else(|_| {

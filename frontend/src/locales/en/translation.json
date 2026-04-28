@@ -24,6 +24,7 @@
   },
   "tabs": {
     "claude": "Claude",
+    "codex": "Codex",
     "usage": "Usage",
     "config": "Config",
     "auth": "Auth"
@@ -85,6 +86,27 @@
   "claudeTab": {
     "submit": "Submit Cookie",
     "status": "Cookie Status"
+  },
+  "codexTab": {
+    "add": "Add",
+    "list": "Credentials"
+  },
+  "codexAdd": {
+    "labelField": "Label (optional)",
+    "labelPlaceholder": "e.g. personal",
+    "authJsonField": "auth.json contents",
+    "authJsonPlaceholder": "{\n  \"tokens\": { \"id_token\": \"...\", \"access_token\": \"...\", \"refresh_token\": \"...\" }\n}",
+    "help": "Run `codex login` locally and paste the contents of ~/.codex/auth.json above.",
+    "submit": "Add credential",
+    "submitting": "Adding...",
+    "success": "Added credential {{id}}",
+    "errorEmpty": "auth.json is required"
+  },
+  "codexList": {
+    "empty": "No Codex credentials configured",
+    "delete": "Delete",
+    "deleteConfirm": "Delete this credential?",
+    "deleted": "Credential deleted"
   },
   "cookieSubmit": {
     "value": "Cookie Value",
