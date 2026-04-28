@@ -79,3 +79,33 @@ fn tools_pass_through_unchanged() {
     // tool_choice "auto" round-trips
     assert!(codex.tool_choice.is_some());
 }
+
+#[test]
+fn rejects_empty_messages() {
+    let oai = serde_json::json!({
+        "model": "gpt-5",
+        "messages": [],
+        "stream": false
+    });
+    let oai: CreateMessageParams = serde_json::from_value(oai).unwrap();
+    assert!(matches!(
+        translate_chat_completions_to_codex(&oai),
+        Err(clewdr::codex_state::transform::TranslateError::NoMessages)
+    ));
+}
+
+#[test]
+fn system_messages_join_with_double_newline() {
+    let oai = serde_json::json!({
+        "model": "gpt-5",
+        "messages": [
+            {"role": "system", "content": "A"},
+            {"role": "system", "content": "B"},
+            {"role": "user", "content": "hi"}
+        ],
+        "stream": false
+    });
+    let oai: CreateMessageParams = serde_json::from_value(oai).unwrap();
+    let codex = translate_chat_completions_to_codex(&oai).expect("translates");
+    assert_eq!(codex.instructions.as_deref(), Some("A\n\nB"));
+}
