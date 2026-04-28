@@ -71,20 +71,40 @@ pub enum CodexSseEvent {
         #[serde(default)]
         output_index: u32,
     },
+    #[serde(rename = "response.output_item.done")]
+    OutputItemDone {
+        item: serde_json::Value,
+        #[serde(default)]
+        output_index: u32,
+    },
+    #[serde(rename = "response.reasoning_text.delta")]
+    ReasoningTextDelta { delta: String },
+    #[serde(rename = "response.reasoning_summary_text.delta")]
+    ReasoningSummaryTextDelta { delta: String },
     #[serde(rename = "response.completed")]
     Completed { response: CodexFinalResponse },
+    #[serde(rename = "response.incomplete")]
+    Incomplete { response: CodexFinalResponse },
+    #[serde(rename = "response.failed")]
+    Failed { response: CodexFinalResponse },
     #[serde(rename = "response.error")]
     Error { message: String, code: Option<String> },
     #[serde(other)]
     Unknown,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct CodexFinalResponse {
     #[serde(default)]
     pub usage: Option<CodexUsage>,
     #[serde(default)]
     pub output: Vec<serde_json::Value>,
+    /// Populated on `response.failed` / `response.incomplete` to surface why
+    /// upstream gave up. Free-form so we can log whatever the server provides.
+    #[serde(default)]
+    pub error: Option<serde_json::Value>,
+    #[serde(default)]
+    pub incomplete_details: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

@@ -27,7 +27,7 @@ fn completed_event_emits_finish_reason_and_usage() {
     let event = CodexSseEvent::Completed {
         response: CodexFinalResponse {
             usage: Some(CodexUsage { input_tokens: 100, output_tokens: 50, total_tokens: None }),
-            output: vec![],
+            ..Default::default()
         },
     };
     let chunk = codex_event_to_oai_chunk(&event, "id-1", "gpt-5", 1_700_000_000).expect("chunk");
@@ -48,7 +48,7 @@ fn aggregates_deltas_into_full_completion() {
                 usage: Some(clewdr::types::codex::CodexUsage {
                     input_tokens: 5, output_tokens: 3, total_tokens: Some(8),
                 }),
-                output: vec![],
+                ..Default::default()
             },
         },
     ];
@@ -221,7 +221,7 @@ fn aggregate_with_tool_calls_finishes_with_tool_calls_reason() {
                     output_tokens: 5,
                     total_tokens: None,
                 }),
-                output: vec![],
+                ..Default::default()
             },
         },
     ];
@@ -265,7 +265,7 @@ fn aggregate_text_only_stays_with_stop_finish_reason() {
                     output_tokens: 1,
                     total_tokens: Some(2),
                 }),
-                output: vec![],
+                ..Default::default()
             },
         },
     ];
@@ -273,4 +273,219 @@ fn aggregate_text_only_stays_with_stop_finish_reason() {
     let v = serde_json::to_value(&resp).unwrap();
     assert_eq!(v["choices"][0]["finish_reason"], "stop");
     assert_eq!(v["choices"][0]["message"]["content"], "abc");
+}
+
+#[test]
+fn reasoning_text_delta_emits_content_chunk() {
+    // Models that emit only reasoning channels still need their text surfaced
+    // on the OAI `delta.content` field — OAI has no separate reasoning channel.
+    let event = CodexSseEvent::ReasoningTextDelta { delta: "thinking...".to_string() };
+    let chunk = codex_event_to_oai_chunk(&event, "id-r", "gpt-5", 1_700_000_000)
+        .expect("emits chunk");
+    let v = serde_json::to_value(&chunk).unwrap();
+    assert_eq!(v["choices"][0]["delta"]["content"], "thinking...");
+    assert!(v["choices"][0]["delta"]["tool_calls"].is_null());
+}
+
+#[test]
+fn reasoning_summary_text_delta_emits_content_chunk() {
+    let event = CodexSseEvent::ReasoningSummaryTextDelta { delta: "summary".to_string() };
+    let chunk = codex_event_to_oai_chunk(&event, "id-r", "gpt-5", 1_700_000_000)
+        .expect("emits chunk");
+    let v = serde_json::to_value(&chunk).unwrap();
+    assert_eq!(v["choices"][0]["delta"]["content"], "summary");
+}
+
+#[test]
+fn tool_call_inline_done_without_deltas_emits_tool_call() {
+    // Codex sometimes emits the entire tool_call inline on output_item.done
+    // without any prior arguments deltas. The full args must still reach the
+    // client as a single chunk.
+    let mut state = CodexStreamState::new();
+    let added = state.handle_event(
+        &CodexSseEvent::OutputItemAdded {
+            item: serde_json::json!({
+                "type": "function_call",
+                "call_id": "call_inline",
+                "name": "read_text_file"
+            }),
+            output_index: 1,
+        },
+        "id",
+        "gpt-5",
+        0,
+    );
+    assert_eq!(added.len(), 1, "added emits intro chunk");
+
+    let done = state.handle_event(
+        &CodexSseEvent::OutputItemDone {
+            item: serde_json::json!({
+                "type": "function_call",
+                "id": "fc_xyz",
+                "status": "completed",
+                "call_id": "call_inline",
+                "name": "read_text_file",
+                "arguments": r#"{"path":"x"}"#,
+            }),
+            output_index: 1,
+        },
+        "id",
+        "gpt-5",
+        0,
+    );
+    assert_eq!(done.len(), 1, "done emits args chunk when no deltas streamed");
+    let v = serde_json::to_value(&done[0]).unwrap();
+    let tc = &v["choices"][0]["delta"]["tool_calls"][0];
+    assert_eq!(tc["index"], 0);
+    assert_eq!(tc["function"]["arguments"], r#"{"path":"x"}"#);
+}
+
+#[test]
+fn tool_call_done_after_deltas_is_noop() {
+    // When deltas already streamed the args, the done event must NOT
+    // re-emit them (would double-arg the client).
+    let mut state = CodexStreamState::new();
+    let _ = state.handle_event(
+        &CodexSseEvent::OutputItemAdded {
+            item: serde_json::json!({
+                "type": "function_call",
+                "call_id": "call_a",
+                "name": "f"
+            }),
+            output_index: 1,
+        },
+        "id",
+        "gpt-5",
+        0,
+    );
+    let _ = state.handle_event(
+        &CodexSseEvent::FunctionCallArgumentsDelta {
+            delta: r#"{"k":"v"}"#.to_string(),
+            item_id: "fc".to_string(),
+            output_index: 1,
+        },
+        "id",
+        "gpt-5",
+        0,
+    );
+    let done = state.handle_event(
+        &CodexSseEvent::OutputItemDone {
+            item: serde_json::json!({
+                "type": "function_call",
+                "call_id": "call_a",
+                "name": "f",
+                "arguments": r#"{"k":"v"}"#,
+            }),
+            output_index: 1,
+        },
+        "id",
+        "gpt-5",
+        0,
+    );
+    assert!(done.is_empty(), "done after deltas should not re-emit args");
+}
+
+#[test]
+fn incomplete_event_emits_final_chunk_with_stop_finish_reason() {
+    use clewdr::types::codex::{CodexFinalResponse, CodexUsage};
+    let event = CodexSseEvent::Incomplete {
+        response: CodexFinalResponse {
+            usage: Some(CodexUsage {
+                input_tokens: 3,
+                output_tokens: 2,
+                total_tokens: Some(5),
+            }),
+            ..Default::default()
+        },
+    };
+    let chunk = codex_event_to_oai_chunk(&event, "id", "gpt-5", 0).expect("chunk");
+    assert_eq!(chunk.choices[0].finish_reason.as_deref(), Some("stop"));
+    let usage = chunk.usage.expect("usage propagated");
+    assert_eq!(usage.total_tokens, 5);
+}
+
+#[test]
+fn failed_event_emits_final_chunk_with_stop_finish_reason() {
+    use clewdr::types::codex::{CodexFinalResponse, CodexUsage};
+    let event = CodexSseEvent::Failed {
+        response: CodexFinalResponse {
+            usage: Some(CodexUsage {
+                input_tokens: 1,
+                output_tokens: 0,
+                total_tokens: None,
+            }),
+            error: Some(serde_json::json!({"message": "model error"})),
+            ..Default::default()
+        },
+    };
+    let chunk = codex_event_to_oai_chunk(&event, "id", "gpt-5", 0).expect("chunk");
+    assert_eq!(chunk.choices[0].finish_reason.as_deref(), Some("stop"));
+}
+
+#[test]
+fn aggregate_with_inline_tool_call_done_returns_canonical_arguments() {
+    use clewdr::types::codex::{CodexFinalResponse, CodexUsage};
+    // output_item.added announces the call but lacks final args; output_item.done
+    // delivers them as a single string. Aggregator must use the .done args verbatim.
+    let events = vec![
+        CodexSseEvent::OutputItemAdded {
+            item: serde_json::json!({
+                "type": "function_call",
+                "call_id": "call_inline",
+                "name": "read_text_file",
+            }),
+            output_index: 1,
+        },
+        CodexSseEvent::OutputItemDone {
+            item: serde_json::json!({
+                "type": "function_call",
+                "call_id": "call_inline",
+                "name": "read_text_file",
+                "arguments": r#"{"head":80,"path":"x"}"#,
+            }),
+            output_index: 1,
+        },
+        CodexSseEvent::Completed {
+            response: CodexFinalResponse {
+                usage: Some(CodexUsage {
+                    input_tokens: 2,
+                    output_tokens: 1,
+                    total_tokens: None,
+                }),
+                ..Default::default()
+            },
+        },
+    ];
+    let resp = aggregate_codex_events(&events, "id", "gpt-5").expect("ok");
+    let v = serde_json::to_value(&resp).unwrap();
+    assert_eq!(v["choices"][0]["finish_reason"], "tool_calls");
+    let tc = &v["choices"][0]["message"]["tool_calls"][0];
+    assert_eq!(tc["id"], "call_inline");
+    assert_eq!(tc["function"]["name"], "read_text_file");
+    assert_eq!(tc["function"]["arguments"], r#"{"head":80,"path":"x"}"#);
+}
+
+#[test]
+fn aggregate_reasoning_delta_appends_to_content() {
+    // Reasoning deltas should be folded into the text content for non-streaming
+    // clients, mirroring the SSE translator.
+    use clewdr::types::codex::{CodexFinalResponse, CodexUsage};
+    let events = vec![
+        CodexSseEvent::ReasoningTextDelta { delta: "first ".into() },
+        CodexSseEvent::ReasoningSummaryTextDelta { delta: "second".into() },
+        CodexSseEvent::Completed {
+            response: CodexFinalResponse {
+                usage: Some(CodexUsage {
+                    input_tokens: 1,
+                    output_tokens: 1,
+                    total_tokens: Some(2),
+                }),
+                ..Default::default()
+            },
+        },
+    ];
+    let resp = aggregate_codex_events(&events, "id", "gpt-5").expect("ok");
+    let v = serde_json::to_value(&resp).unwrap();
+    assert_eq!(v["choices"][0]["message"]["content"], "first second");
+    assert_eq!(v["choices"][0]["finish_reason"], "stop");
 }
