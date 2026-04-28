@@ -13,7 +13,9 @@ fn translates_simple_user_message() {
     let oai: CreateMessageParams = serde_json::from_value(oai).unwrap();
     let codex = translate_chat_completions_to_codex(&oai).expect("translates");
     assert_eq!(codex.model, "gpt-5");
-    assert!(codex.instructions.is_none());
+    // Codex backend rejects requests without `instructions`; we set a default
+    // when the client doesn't supply a system message.
+    assert!(codex.instructions.is_some());
     assert_eq!(codex.input.len(), 1);
 }
 

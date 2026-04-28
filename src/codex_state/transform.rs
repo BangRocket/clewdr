@@ -73,8 +73,11 @@ pub fn translate_chat_completions_to_codex(
         }
     }
 
+    // Codex backend rejects requests without an `instructions` field
+    // (responds with `{"detail":"Instructions are required"}`). Use a generic
+    // default when the client doesn't supply a system message.
     let instructions = if system_parts.is_empty() {
-        None
+        Some("You are a helpful assistant.".to_string())
     } else {
         Some(system_parts.join("\n\n"))
     };
