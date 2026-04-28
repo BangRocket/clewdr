@@ -59,3 +59,23 @@ fn maps_max_tokens_to_max_output_tokens() {
     let codex = translate_chat_completions_to_codex(&oai).expect("translates");
     assert_eq!(codex.max_output_tokens, Some(256));
 }
+
+#[test]
+fn tools_pass_through_unchanged() {
+    let tools = serde_json::json!([
+        {"type": "function", "function": {"name": "search", "description": "x", "parameters": {}}}
+    ]);
+    let oai = serde_json::json!({
+        "model": "gpt-5",
+        "messages": [{"role": "user", "content": "hi"}],
+        "tools": tools.clone(),
+        "tool_choice": "auto",
+        "stream": false
+    });
+    let oai: CreateMessageParams = serde_json::from_value(oai).unwrap();
+    let codex = translate_chat_completions_to_codex(&oai).expect("translates");
+    // Tools deserialize through Claude's `Tool::Raw(Value)` arm and re-serialize via serde_json.
+    assert_eq!(codex.tools.len(), 1);
+    // tool_choice "auto" round-trips
+    assert!(codex.tool_choice.is_some());
+}
