@@ -34,7 +34,7 @@ Streaming responses work on every endpoint.
 1. Download the latest release for your platform from GitHub.  
    Linux/macOS example:
    ```bash
-   curl -L -o clewdr.tar.gz https://github.com/Xerxes-2/clewdr/releases/latest/download/clewdr-linux-x64.tar.gz
+   curl -L -o clewdr.tar.gz https://github.com/BangRocket/clewdr/releases/latest/download/clewdr-linux-x64.tar.gz
    tar -xzf clewdr.tar.gz && cd clewdr-linux-x64
    chmod +x clewdr
    ```
@@ -148,10 +148,12 @@ Cursor:
 
 ## Resources
 
-- Wiki: <https://github.com/Xerxes-2/clewdr/wiki>  
+- Fork: <https://github.com/BangRocket/clewdr>  
+- Upstream wiki: <https://github.com/Xerxes-2/clewdr/wiki>  
 
 ## Thanks
 
+- Originally created by [Xerxes-2](https://github.com/Xerxes-2/clewdr); this is a fork.  
 - [wreq](https://github.com/0x676e67/wreq) for the fingerprinting library.  
 - [Clewd](https://github.com/teralomaniac/clewd) for many upstream ideas.  
 - [Clove](https://github.com/mirrorange/clove) for Claude Code helpers.
