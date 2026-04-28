@@ -1,5 +1,6 @@
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct CodexAuth {
@@ -89,4 +90,74 @@ pub fn decode_codex_id_token_claims(token: &str) -> Result<CodexIdTokenClaims, C
         .map(str::to_string);
 
     Ok(CodexIdTokenClaims { account_id, plan })
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum CodexAuthParseError {
+    #[error("auth.json malformed: {0}")]
+    Json(#[from] serde_json::Error),
+    #[error("missing tokens.{field}")]
+    MissingField { field: &'static str },
+    #[error("id_token claims invalid: {0}")]
+    Claims(#[from] CodexJwtError),
+}
+
+impl CodexAuth {
+    pub fn from_auth_json(body: &str, label: Option<String>) -> Result<Self, CodexAuthParseError> {
+        let v: serde_json::Value = serde_json::from_str(body)?;
+        let tokens = v
+            .get("tokens")
+            .ok_or(CodexAuthParseError::MissingField { field: "tokens" })?;
+
+        let get = |k: &'static str| -> Result<String, CodexAuthParseError> {
+            tokens
+                .get(k)
+                .and_then(|x| x.as_str())
+                .map(str::to_string)
+                .ok_or(CodexAuthParseError::MissingField { field: k })
+        };
+        let id_token = get("id_token")?;
+        let access_token = get("access_token")?;
+        let refresh_token = get("refresh_token")?;
+
+        let claims = decode_codex_id_token_claims(&id_token)?;
+        let account_id = tokens
+            .get("account_id")
+            .and_then(|x| x.as_str())
+            .map(str::to_string)
+            .unwrap_or(claims.account_id);
+
+        // Stable id = first 16 hex chars of sha256(refresh_token)
+        let mut hasher = Sha256::new();
+        hasher.update(refresh_token.as_bytes());
+        let id = hex_first_n(&hasher.finalize(), 16);
+
+        // Conservative: assume access_token already nearly expired so first request triggers refresh.
+        let access_expires_at = 0;
+
+        Ok(CodexAuth {
+            id,
+            label,
+            id_token,
+            access_token,
+            refresh_token,
+            access_expires_at,
+            account_id,
+            plan: claims.plan,
+            status: CodexAuthStatus::Valid,
+            last_used_at: None,
+        })
+    }
+}
+
+fn hex_first_n(bytes: &[u8], n: usize) -> String {
+    let mut s = String::with_capacity(n);
+    for b in bytes {
+        if s.len() >= n {
+            break;
+        }
+        s.push_str(&format!("{:02x}", b));
+    }
+    s.truncate(n);
+    s
 }
