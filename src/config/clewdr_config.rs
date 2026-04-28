@@ -219,11 +219,18 @@ impl Display for ClewdrConfig {
             f,
             "Claude(Claude and OpenAI format) Endpoint: {}\n\
             Claude Code(Claude and OpenAI format) Endpoint: {}\n\
+            Codex(OpenAI format) Endpoint: {}\n\
+            Default OAI Backend (/v1/chat/completions): {}\n\
             API Password: {}\n\
             Web Admin Endpoint: {}\n\
             Web Admin Password: {}\n",
             api_url.to_string().green().underline(),
             (web_url.to_string() + "code/v1").green().underline(),
+            (web_url.to_string() + "codex/v1").green().underline(),
+            match self.default_oai_backend {
+                OaiBackend::Claude => "claude".green(),
+                OaiBackend::Codex => "codex".green(),
+            },
             self.password.yellow(),
             web_url.to_string().green().underline(),
             self.admin_password.yellow(),
