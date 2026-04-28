@@ -213,6 +213,13 @@
         "ip": "IP Address",
         "port": "Port"
       },
+      "oaiBackend": {
+        "title": "OpenAI Endpoint Backend",
+        "description": "Selects which backend serves the bare /v1/chat/completions endpoint. Path-based endpoints (/v1/messages, /code/v1/*, /codex/v1/*) are not affected.",
+        "label": "Backend for /v1/chat/completions",
+        "claude": "Claude (web)",
+        "codex": "Codex"
+      },
       "app": {
         "title": "App Settings",
         "checkUpdate": "Check for updates",

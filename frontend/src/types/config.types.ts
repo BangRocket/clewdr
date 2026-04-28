@@ -1,4 +1,10 @@
+export type OaiBackend = "claude" | "codex";
+
 export interface ConfigData {
+  // Backend selection for the bare /v1/chat/completions endpoint.
+  // Path-based endpoints (/v1/messages, /code/v1/*, /codex/v1/*) ignore this.
+  default_oai_backend?: OaiBackend;
+
   // Server settings
   ip: string;
   port: number;

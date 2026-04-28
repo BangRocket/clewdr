@@ -213,6 +213,13 @@
         "ip": "IP地址",
         "port": "端口"
       },
+      "oaiBackend": {
+        "title": "OpenAI 端点后端",
+        "description": "选择由哪个后端处理裸 /v1/chat/completions 端点。基于路径的端点（/v1/messages、/code/v1/*、/codex/v1/*）不受影响。",
+        "label": "/v1/chat/completions 使用的后端",
+        "claude": "Claude（Web）",
+        "codex": "Codex"
+      },
       "app": {
         "title": "应用设置",
         "checkUpdate": "检查更新",
