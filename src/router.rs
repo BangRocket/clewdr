@@ -22,6 +22,8 @@ use crate::{
 pub struct RouterBuilder {
     claude_providers: ClaudeProviders,
     cookie_actor_handle: CookieActorHandle,
+    codex_auth_handle: crate::services::codex_auth_actor::CodexAuthActorHandle,
+    codex_provider: std::sync::Arc<crate::providers::codex::CodexProvider>,
     inner: Router,
 }
 
@@ -36,9 +38,16 @@ impl RouterBuilder {
             .await
             .expect("Failed to start CookieActor");
         let claude_providers = crate::providers::claude::build_providers(cookie_handle.clone());
+        let codex_auth_handle = crate::services::codex_auth_actor::CodexAuthActorHandle::start()
+            .await
+            .expect("Failed to start CodexAuthActor");
+        let codex_provider =
+            crate::providers::codex::build_codex_provider(codex_auth_handle.clone());
         RouterBuilder {
             claude_providers,
             cookie_actor_handle: cookie_handle,
+            codex_auth_handle,
+            codex_provider,
             inner: Router::new(),
         }
     }
@@ -51,6 +60,8 @@ impl RouterBuilder {
             .route_admin_endpoints()
             .route_claude_web_oai_endpoints()
             .route_claude_code_oai_endpoints()
+            .route_codex_oai_endpoints()
+            .route_codex_admin_endpoints()
             .setup_static_serving()
             .with_tower_trace()
             .with_cors()
@@ -164,6 +175,33 @@ impl RouterBuilder {
             )
             .with_state(self.claude_providers.code());
         self.inner = self.inner.merge(router);
+        self
+    }
+
+    /// Sets up routes for Codex OpenAI compatible endpoints
+    fn route_codex_oai_endpoints(mut self) -> Self {
+        let router = Router::new()
+            .route("/codex/v1/chat/completions", post(api_codex_chat))
+            .route("/codex/v1/models", get(api_codex_models))
+            .layer(
+                ServiceBuilder::new()
+                    .layer(from_extractor::<RequireBearerAuth>())
+                    .layer(CompressionLayer::new()),
+            )
+            .with_state(self.codex_provider.clone());
+        self.inner = self.inner.merge(router);
+        self
+    }
+
+    /// Sets up admin routes for managing Codex auth credentials
+    fn route_codex_admin_endpoints(mut self) -> Self {
+        let router = Router::new()
+            .route("/codex/auth", get(api_codex_list).post(api_codex_add))
+            .route("/codex/auth/{id}", delete(api_codex_delete))
+            .with_state(self.codex_auth_handle.clone());
+        let admin = Router::new()
+            .nest("/api", router.layer(from_extractor::<RequireAdminAuth>()));
+        self.inner = self.inner.merge(admin);
         self
     }
 
